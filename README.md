@@ -2,7 +2,7 @@
 
 Platform Point of Sale (POS) berbasis web untuk toko retail, usaha kecil, dan UMKM. Arah pengembangan IRIS adalah menjadi platform operasional bisnis modular berbasis SaaS, bukan hanya aplikasi kasir.
 
-> **Status:** Tahap 7 — tutup gap P0 produk & stok + migrasi skema v2 (2026-11-25). Tenant kini bisa tambah/edit/arsip produk (SKU, barcode, kategori, satuan dasar wajib, harga beli/jual, stok minimum opsional), filter kategori + indikator stok habis/rendah, catat saldo awal (`opening_balance`, sekali per produk×outlet, dengan tanggal efektif), penyesuaian masuk/keluar, dan melihat kartu stok dengan kolom masuk/keluar + saldo berjalan; saldo direkonsiliasi dengan ledger dan tidak bisa negatif. Database tenant SQLite kini skema v2 (14 tabel; migrasi otomatis dari v1). Landing page punya header/nav, hero + mockup kasir, value strip, masalah, fitur, showcase, cara kerja, solusi, harga, keamanan, FAQ, dan final CTA. Pendaftaran mandiri **belum** ada — `/register` mengarahkan ke WhatsApp resmi 0822-3772-7330. Trial 14 hari **belum aktif**. Kuota/fitur per paket menyusul. Aplikasi tenant dilindungi login dengan role owner/admin/cashier. Modul kasir, pembelian, penjualan, keuangan, dan laporan **belum** diimplementasikan. Daftar fitur di dokumen adalah peta ruang lingkup produk — **bukan** pernyataan bahwa semua fitur sudah selesai atau tersedia.
+> **Status:** P1 Tahap 2 — halaman kasir + keranjang (2026-11-25). Tenant kini bisa membuka halaman kasir (`/pos`), mencari produk (nama/SKU/barcode), menambah ke keranjang, mengubah kuantitas, menghapus item, dan melihat subtotal/total yang dihitung ulang di server; produk nonaktif dan kuantitas melebihi stok ditolak. Keranjang disimpan di session dan **belum** mem-posting transaksi atau mengubah stok/ledger. Pembayaran, penyimpanan penjualan, struk, dan pembatalan masuk Tahap 3. Modul produk & stok P0 selesai: tambah/edit/arsip produk (SKU, barcode, kategori, satuan dasar wajib, harga beli/jual, stok minimum opsional), filter kategori + indikator stok habis/rendah, saldo awal (`opening_balance`, sekali per produk×outlet, dengan tanggal efektif), penyesuaian masuk/keluar, kartu stok dengan kolom masuk/keluar + saldo berjalan; saldo direkonsiliasi dengan ledger dan tidak bisa negatif. Database tenant SQLite kini skema v2 (14 tabel; migrasi otomatis dari v1). Landing page punya header/nav, hero + mockup kasir, value strip, masalah, fitur, showcase, cara kerja, solusi, harga, keamanan, FAQ, dan final CTA. Pendaftaran mandiri **belum** ada — `/register` mengarahkan ke WhatsApp resmi 0822-3772-7330. Trial 14 hari **belum aktif**. Kuota/fitur per paket menyusul. Aplikasi tenant dilindungi login dengan role owner/admin/cashier. Pembelian, keuangan, dan laporan **belum** diimplementasikan. Daftar fitur di dokumen adalah peta ruang lingkup produk — **bukan** pernyataan bahwa semua fitur sudah selesai atau tersedia.
 
 - **Nama proyek:** IRIS Platform
 - **Nama aplikasi:** POS IRIS
@@ -52,7 +52,7 @@ Tes:
 
 ```bash
 python -m pytest tests/ -q
-# Terakhir diuji lokal: 25 passed (2026-11-25)
+# Terakhir diuji lokal: 38 passed (2026-11-25)
 ```
 
 > **Peringatan keamanan:** Super Admin masih **belum punya autentikasi** — jangan diekspos ke internet. Aplikasi tenant sudah login + role, tapi belum ada rate limiting login, penguncian akun, atau reset password. Secret hanya dari environment (`.env`, tidak di-commit); password pengguna disimpan sebagai hash (Werkzeug/scrypt), bukan teks mentah.

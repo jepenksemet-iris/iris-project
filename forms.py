@@ -10,7 +10,13 @@ from wtforms import (
     StringField,
     SubmitField,
 )
-from wtforms.validators import DataRequired, Length, NumberRange, Optional
+from wtforms.validators import (
+    DataRequired,
+    InputRequired,
+    Length,
+    NumberRange,
+    Optional,
+)
 
 
 class LoginForm(FlaskForm):
@@ -63,6 +69,34 @@ class StockAdjustForm(FlaskForm):
     )
     note = StringField("Keterangan", validators=[Optional(), Length(max=200)])
     submit = SubmitField("Simpan penyesuaian")
+
+
+class CartAddForm(FlaskForm):
+    product_id = IntegerField("Produk", validators=[DataRequired()])
+    # InputRequired (bukan DataRequired): angka 0 harus lolos validasi
+    # form supaya ditolak dengan pesan yang jelas di route.
+    qty = FloatField(
+        "Kuantitas",
+        validators=[InputRequired(),
+                    NumberRange(min=0, message="Kuantitas harus lebih dari 0.")],
+        default=1,
+    )
+    submit = SubmitField("Tambah")
+
+
+class CartSetForm(FlaskForm):
+    product_id = IntegerField("Produk", validators=[DataRequired()])
+    qty = FloatField(
+        "Kuantitas",
+        validators=[InputRequired(),
+                    NumberRange(min=0, message="Kuantitas harus lebih dari 0.")],
+    )
+    submit = SubmitField("Ubah")
+
+
+class CartRemoveForm(FlaskForm):
+    product_id = IntegerField("Produk", validators=[DataRequired()])
+    submit = SubmitField("Hapus")
 
 
 class ConfirmForm(FlaskForm):

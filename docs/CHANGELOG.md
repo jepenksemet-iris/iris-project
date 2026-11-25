@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-25 — P1 Tahap 2: halaman kasir, keranjang & kalkulasi
+
+- **Halaman kasir** (`GET /pos`, semua role yang login): pencarian nama/SKU/barcode (scanner berfungsi seperti keyboard), hasil pencarian dengan harga + stok outlet default, keranjang selalu terlihat, total menonjol; tombol proses pembayaran dinonaktifkan dengan keterangan "Tahap 3".
+- **Keranjang di session per tenant** (`POST /pos/cart/add|set|remove|clear`): produk yang sama digabung satu baris; kuantitas 0 pada ubah = hapus item; kosongkan keranjang dengan konfirmasi. **Tidak ada** transaksi penjualan yang diposting dan **tidak ada** perubahan stok/ledger pada tahap ini.
+- `iris_db.py` — `search_products()` (produk aktif saja, stok outlet default) dan `summarize_cart()` (harga selalu dari `sell_price` database; validasi aktif, qty > 0, qty ≤ stok; baris bermasalah tidak dihitung).
+- `forms.py` — `CartAddForm`/`CartSetForm`/`CartRemoveForm` (CSRF). Perbaikan kecil: validator kuantitas memakai `InputRequired` supaya angka 0 ditolak dengan pesan yang jelas, bukan gagal diam-diam (`DataRequired` menganggap 0 kosong).
+- Template `templates/pos/cashier.html` + `static/css/pos.css` (dua kolom di desktop, satu kolom ≤ 768px); tautan "Buka kasir" dari dashboard tenant.
+- Tes baru `tests/test_pos.py` (13 tes): halaman terbuka + wajib login, cari nama/SKU/barcode, tambah + gabung, nonaktif ditolak, qty 0/negatif ditolak, qty melebihi stok ditolak, kalkulasi dua produk, harga dihitung ulang dari server (harga palsu dari browser diabaikan; harga DB diubah → total ikut), ubah/hapus/kosongkan, **tidak ada perubahan stok/ledger/sales saat keranjang berubah**, isolasi tenant, kasir boleh kasir tapi 403 kelola produk, CSRF tanpa token. Total **38 passed** lokal (Python 3.12.3); smoke HTTP: `/pos` tanpa login 302, `/login` 200, `pos.css` 200, `/health` 200.
+- Audit P1 (`docs/P1_KASIR_AUDIT.md`) ditulis sebelum coding: P0 terverifikasi selesai (25 tes), gap skema v3 untuk Tahap 3 (snapshot produk di `sale_items`, status `pending`, `payment_ref`, `idempotency_key`, kolom pembatalan) dicatat di sana — belum dikerjakan.
+
 ## 2026-11-25 — Tahap 7: tutup gap P0 produk & stok + migrasi skema v2 (Paket B)
 
 - **Migrasi skema v1 → v2** (`iris_schema.sql`, `iris_db.py`): `SCHEMA_VERSION = 2`; `stock_movements.kind` ditambah `opening_balance`, `adjustment_in`, `adjustment_out`; kolom baru `effective_date`. `migrate_tenant_db()` membuat ulang tabel dalam satu transaksi (CHECK SQLite tidak bisa di-ALTER) dengan pemetaan data lama: `adjustment` + catatan "Saldo awal…" → `opening_balance`, positif → `adjustment_in`, negatif → `adjustment_out`. `init_tenant_db()` menjalankan migrasi otomatis untuk DB lama; DB baru langsung v2.

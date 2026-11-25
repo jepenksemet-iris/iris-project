@@ -409,6 +409,94 @@ def record_opening_balance(conn, product_id, outlet_id, qty, note="",
     )
 
 
+def search_products(conn, q, outlet_id=None, limit=20):
+    """Cari produk AKTIF berdasarkan nama, SKU, atau barcode.
+
+    Mengembalikan stok di outlet yang diminta (bila diisi) — itulah
+    stok yang bisa dijual kasir. Tanpa outlet_id, kembalikan total
+    stok semua outlet. Hanya produk aktif yang dapat dijual.
+    """
+    q = (q or "").strip()
+    if not q:
+        return []
+    like = f"%{q}%"
+    if outlet_id is not None:
+        sql = (
+            "SELECT p.*, c.name AS category, u.name AS unit,"
+            " COALESCE(s.qty, 0) AS stock_qty"
+            " FROM products p"
+            " LEFT JOIN categories c ON c.id = p.category_id"
+            " LEFT JOIN units u ON u.id = p.unit_id"
+            " LEFT JOIN stock s ON s.product_id = p.id AND s.outlet_id = ?"
+            " WHERE p.is_active = 1"
+            " AND (p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)"
+            " ORDER BY p.name LIMIT ?"
+        )
+        return conn.execute(sql, (outlet_id, like, like, like, limit)).fetchall()
+    sql = (
+        "SELECT p.*, c.name AS category, u.name AS unit,"
+        " COALESCE(SUM(s.qty), 0) AS stock_qty"
+        " FROM products p"
+        " LEFT JOIN categories c ON c.id = p.category_id"
+        " LEFT JOIN units u ON u.id = p.unit_id"
+        " LEFT JOIN stock s ON s.product_id = p.id"
+        " WHERE p.is_active = 1"
+        " AND (p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)"
+        " GROUP BY p.id ORDER BY p.name LIMIT ?"
+    )
+    return conn.execute(sql, (like, like, like, limit)).fetchall()
+
+
+def summarize_cart(conn, items, outlet_id):
+    """Hitung ulang keranjang dari database (sumber kebenaran server).
+
+    ``items`` adalah daftar dict {"product_id": int, "qty": float}.
+    Harga selalu diambil dari products.sell_price; stok divalidasi
+    terhadap outlet yang dipakai kasir. Mengembalikan
+    (lines, total_qty, total_rp, errors) dengan lines berisi
+    product, qty, price, subtotal per baris. Baris bermasalah
+    (produk hilang/nonaktif, qty tidak valid, stok kurang) masuk ke
+    errors dan tidak dihitung ke total.
+    """
+    lines = []
+    errors = []
+    total_qty = 0
+    total = 0
+    for item in items:
+        try:
+            product_id = int(item.get("product_id"))
+            qty = float(item.get("qty"))
+        except (TypeError, ValueError):
+            errors.append("Item keranjang tidak valid.")
+            continue
+        product = get_product(conn, product_id)
+        if product is None:
+            errors.append(f"Produk #{product_id} tidak ditemukan.")
+            continue
+        if not product["is_active"]:
+            errors.append(f"{product['name']} sudah nonaktif.")
+            continue
+        if qty <= 0:
+            errors.append(f"Kuantitas {product['name']} harus lebih dari 0.")
+            continue
+        available = get_stock_qty(conn, product_id, outlet_id)
+        if qty > available:
+            errors.append(
+                f"Stok {product['name']} tidak cukup"
+                f" (tersedia {available:g}, diminta {qty:g})."
+            )
+            continue
+        price = int(product["sell_price"])
+        subtotal = int(round(price * qty))
+        lines.append({
+            "product": product, "qty": qty, "price": price,
+            "subtotal": subtotal,
+        })
+        total_qty += qty
+        total += subtotal
+    return lines, total_qty, total, errors
+
+
 def reconcile_stock(conn, product_id, outlet_id):
     """Bandingkan saldo tabel stock dengan jumlah seluruh mutasi ledger
     untuk produk×outlet. Mengembalikan (saldo_stock, jumlah_mutasi,

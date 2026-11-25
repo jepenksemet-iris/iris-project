@@ -1,9 +1,11 @@
-"""Tenant app — POS IRIS (tahap 7: produk & stok, skema v2).
+"""Tenant app — POS IRIS (tahap 8: P1 tahap 2 kasir + keranjang, skema v2).
 
 Aplikasi operasional milik tenant. Modul produk & stok sudah ada:
 tambah/edit/arsip produk, penyesuaian stok atomik dengan ledger
-mutasi (stock_movements). Modul kasir/pembelian/penjualan/keuangan/
-laporan masih belum diimplementasikan (lihat docs/MODULES.md).
+mutasi (stock_movements). Modul kasir tahap 2 (halaman kasir +
+keranjang, tanpa posting transaksi) sudah ada. Pembayaran,
+penyimpanan penjualan, struk, dan pembatalan masih belum
+diimplementasikan (lihat docs/MODULES.md).
 
 Jalan di port 5001. Identitas tenant berasal dari LOGIN (disimpan di
 session), bukan lagi dari query ``?tenant=``.
@@ -35,7 +37,15 @@ from flask import (
 from flask_login import current_user, login_required, login_user, logout_user
 
 from config import get_config
-from forms import ConfirmForm, LoginForm, ProductForm, StockAdjustForm
+from forms import (
+    CartAddForm,
+    CartRemoveForm,
+    CartSetForm,
+    ConfirmForm,
+    LoginForm,
+    ProductForm,
+    StockAdjustForm,
+)
 from iris_auth import TenantUser, require_role, setup_auth
 from iris_db import (
     adjust_stock,
@@ -54,7 +64,9 @@ from iris_db import (
     list_products,
     list_stock_movements,
     record_opening_balance,
+    search_products,
     set_product_active,
+    summarize_cart,
     update_product,
     validate_tenant_slug,
     verify_user,
@@ -70,8 +82,30 @@ def create_app(config_class=None):
         raise RuntimeError("SECRET_KEY production belum diset di environment")
 
     def _db(slug):
-        # Selalu pastikan skema v1 sudah diterapkan sebelum dipakai.
+        # Selalu pastikan skema terbaru sudah diterapkan sebelum dipakai.
         return init_tenant_db(slug, data_dir=app.config["DATA_DIR"])
+
+    # -- Keranjang kasir (session, per tenant) -------------------------
+    # Keranjang belum menjadi transaksi: tidak menulis database apa pun.
+    # Harga/stok/total selalu dihitung ulang dari database oleh
+    # summarize_cart() setiap kali ditampilkan atau diubah.
+    def _get_cart(slug):
+        cart = session.get("pos_cart") or {}
+        if cart.get("tenant") != slug:
+            return []
+        items = []
+        for item in cart.get("items") or []:
+            try:
+                items.append({
+                    "product_id": int(item["product_id"]),
+                    "qty": float(item["qty"]),
+                })
+            except (KeyError, TypeError, ValueError):
+                continue
+        return items
+
+    def _save_cart(slug, items):
+        session["pos_cart"] = {"tenant": slug, "items": items}
 
     @app.get("/")
     @login_required
@@ -330,6 +364,128 @@ def create_app(config_class=None):
             date_from=date_from,
             date_to=date_to,
         )
+
+    # -- Kasir (P1 tahap 2: halaman + keranjang, tanpa posting) --------
+    @app.get("/pos")
+    @login_required
+    def pos():
+        slug = session["tenant"]
+        q = (request.args.get("q") or "").strip()
+        conn = _db(slug)
+        try:
+            outlet = get_default_outlet(conn)
+            results = search_products(conn, q, outlet_id=outlet["id"]) if q else []
+            items = _get_cart(slug)
+            lines, total_qty, total, errors = summarize_cart(
+                conn, items, outlet["id"])
+        finally:
+            conn.close()
+        return render_template(
+            "pos/cashier.html",
+            tenant=slug,
+            q=q,
+            results=results,
+            lines=lines,
+            total_qty=total_qty,
+            total=total,
+            cart_errors=errors,
+            add_form=CartAddForm(),
+            set_form=CartSetForm(),
+            remove_form=CartRemoveForm(),
+            clear_form=ConfirmForm(),
+        )
+
+    def _apply_cart_change(slug, form, change):
+        """Validasi perubahan keranjang terhadap database, lalu simpan
+        ke session bila valid. Mengembalikan True bila tersimpan."""
+        if not form.validate_on_submit():
+            for field_errors in form.errors.values():
+                for err in field_errors:
+                    flash(err, "error")
+            return False
+        conn = _db(slug)
+        try:
+            outlet = get_default_outlet(conn)
+            items = _get_cart(slug)
+            new_items = change(items, form)
+            if new_items is None:
+                return False
+            _, _, _, errors = summarize_cart(conn, new_items, outlet["id"])
+            if errors:
+                for err in errors:
+                    flash(err, "error")
+                return False
+            _save_cart(slug, new_items)
+            return True
+        finally:
+            conn.close()
+
+    @app.post("/pos/cart/add")
+    @login_required
+    def pos_cart_add():
+        slug = session["tenant"]
+        form = CartAddForm()
+
+        def change(items, form):
+            qty = form.qty.data
+            if not qty or qty <= 0:
+                flash("Kuantitas harus lebih dari 0.", "error")
+                return None
+            items = [dict(i) for i in items]
+            for item in items:
+                if item["product_id"] == form.product_id.data:
+                    item["qty"] = item["qty"] + qty
+                    return items
+            items.append({"product_id": form.product_id.data, "qty": qty})
+            return items
+
+        _apply_cart_change(slug, form, change)
+        return redirect(url_for("pos", q=request.args.get("q", "")))
+
+    @app.post("/pos/cart/set")
+    @login_required
+    def pos_cart_set():
+        slug = session["tenant"]
+        form = CartSetForm()
+
+        def change(items, form):
+            qty = form.qty.data
+            if qty is None or qty < 0:
+                flash("Kuantitas tidak boleh negatif.", "error")
+                return None
+            items = [dict(i) for i in items]
+            for item in items:
+                if item["product_id"] == form.product_id.data:
+                    if qty == 0:
+                        return [i for i in items
+                                if i["product_id"] != form.product_id.data]
+                    item["qty"] = qty
+                    return items
+            flash("Item tidak ada di keranjang.", "error")
+            return None
+
+        _apply_cart_change(slug, form, change)
+        return redirect(url_for("pos", q=request.args.get("q", "")))
+
+    @app.post("/pos/cart/remove")
+    @login_required
+    def pos_cart_remove():
+        slug = session["tenant"]
+        form = CartRemoveForm()
+        if form.validate_on_submit():
+            items = [i for i in _get_cart(slug)
+                     if i["product_id"] != form.product_id.data]
+            _save_cart(slug, items)
+        return redirect(url_for("pos", q=request.args.get("q", "")))
+
+    @app.post("/pos/cart/clear")
+    @login_required
+    def pos_cart_clear():
+        slug = session["tenant"]
+        form = ConfirmForm()
+        if form.validate_on_submit():
+            _save_cart(slug, [])
+        return redirect(url_for("pos"))
 
     @app.route("/login", methods=["GET", "POST"])
     def login():

@@ -52,7 +52,7 @@
 |---|---|---|---|
 | Pesanan Penjualan / Sales Order | Belum Ada | Tidak ada tabel sales order | P1 — setelah kasir dasar jalan |
 | Daftar / Input Penjualan (back-office) | Belum Ada | Tabel `sales, sale_items` ada; tanpa route/template/logika | P0 — faktur back-office setelah kasir, atau bersamaan dengan pola form yang sama |
-| Penjualan Kasir (POS) | Belum Ada | Tanpa route/template; landing hanya menampilkan mockup ilustrasi (data contoh) | **P0, prioritas tertinggi setelah Produk & Stok** — keyboard-first, barcode, keranjang selalu terlihat, total menonjol |
+| Penjualan Kasir (POS) | Parsial | **P1 Tahap 2 (2026-11-25):** halaman kasir `/pos` + keranjang di session + kalkulasi server (cari nama/SKU/barcode, tambah/gabung, ubah/hapus, validasi stok & harga, kasir boleh pakai, CSRF; `tests/test_pos.py`, 13 tes). Tombol bayar belum aktif | P1 — Tahap 3 pembayaran + posting atomik, Tahap 4 ledger, Tahap 5 histori/struk/pembatalan |
 | History Harga Jual | Belum Ada | Dapat diturunkan dari `sale_items` setelah penjualan ada | P1 |
 | Pembayaran Piutang, Status Lunas BG/Cek | Belum Ada | Tidak ada tabel piutang/pembayaran | P0 (piutang) — piutang = sisa nilai penjualan kredit |
 | Retur Penjualan | Belum Ada | Tanpa tabel/route | P0 — retur membalikkan stok + piutang sesuai aturan |

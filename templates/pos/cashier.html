@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Kasir — Tenant {{ tenant }}{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="/static/css/pos.css">{% endblock %}
+{% block content %}
+<h1>Kasir</h1>
+<p><a href="/">Kembali ke dashboard</a></p>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul>
+  {% for category, message in messages %}
+  <li><strong>{{ category }}:</strong> {{ message }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+<div class="pos-layout">
+  <section class="pos-search">
+    <h2>Cari produk</h2>
+    <form method="get" action="/pos">
+      <label>Cari nama / SKU / barcode (scanner berfungsi seperti keyboard):
+        <input type="search" name="q" value="{{ q }}" autofocus>
+      </label>
+      <button type="submit">Cari</button>
+    </form>
+    <div class="pos-results">
+      {% if q and not results %}
+      <p>Produk tidak ditemukan untuk "{{ q }}".</p>
+      {% elif results %}
+      <table>
+        <tr><th>Produk</th><th>SKU</th><th>Satuan</th><th>Harga</th><th>Stok</th><th></th></tr>
+        {% for p in results %}
+        <tr>
+          <td>{{ p.name }}</td>
+          <td>{{ p.sku }}</td>
+          <td>{{ p.unit or '-' }}</td>
+          <td>Rp {{ p.sell_price }}</td>
+          <td>{{ p.stock_qty }}</td>
+          <td>
+            <form method="post" action="{{ url_for('pos_cart_add', q=q) }}">
+              {{ add_form.hidden_tag() }}
+              <input type="hidden" name="product_id" value="{{ p.id }}">
+              <input type="number" name="qty" value="1" min="0.01" step="any" required>
+              <button type="submit" {% if p.stock_qty <= 0 %}disabled{% endif %}>Tambah</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p>Cari produk berdasarkan nama, SKU, atau barcode.</p>
+      {% endif %}
+    </div>
+  </section>
+  <section class="pos-cart">
+    <h2>Keranjang</h2>
+    {% if cart_errors %}
+    <ul>
+      {% for e in cart_errors %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if lines %}
+    <table>
+      <tr><th>Produk</th><th>SKU</th><th>Harga</th><th>Kuantitas</th><th>Subtotal</th><th></th></tr>
+      {% for line in lines %}
+      <tr>
+        <td>{{ line.product.name }}</td>
+        <td>{{ line.product.sku }}</td>
+        <td>Rp {{ line.price }}</td>
+        <td>
+          <form method="post" action="{{ url_for('pos_cart_set', q=q) }}" style="display:inline">
+            {{ set_form.hidden_tag() }}
+            <input type="hidden" name="product_id" value="{{ line.product.id }}">
+            <input type="number" name="qty" value="{{ line.qty }}" min="0" step="any" required>
+            <button type="submit">Ubah</button>
+          </form>
+        </td>
+        <td>Rp {{ line.subtotal }}</td>
+        <td>
+          <form method="post" action="{{ url_for('pos_cart_remove', q=q) }}" style="display:inline">
+            {{ remove_form.hidden_tag() }}
+            <input type="hidden" name="product_id" value="{{ line.product.id }}">
+            <button type="submit">Hapus</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    <p>Total kuantitas: {{ total_qty }}</p>
+    <p class="pos-total">Total: Rp {{ total }}</p>
+    <form method="post" action="{{ url_for('pos_cart_clear') }}" onsubmit="return confirm('Kosongkan keranjang?')">
+      {{ clear_form.hidden_tag() }}
+      <button type="submit">Kosongkan keranjang</button>
+    </form>
+    {% else %}
+    <p>Keranjang masih kosong.</p>
+    {% endif %}
+    <hr>
+    <p class="pos-checkout-note">Pembayaran dan penyimpanan transaksi masuk Tahap 3 — tombol proses pembayaran belum aktif pada tahap ini.</p>
+    <button type="button" disabled>Proses pembayaran (Tahap 3)</button>
+  </section>
+</div>
+{% endblock %}

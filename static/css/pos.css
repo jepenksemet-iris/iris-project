@@ -1,0 +1,43 @@
+/* Kasir IRIS (P1 tahap 2) — mengikuti pola sederhana template tenant.
+   Dua kolom di desktop (pencarian | keranjang), satu kolom di ponsel. */
+.pos-layout {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+.pos-search input[type="search"] {
+  width: 100%;
+  max-width: 22rem;
+  padding: .4rem .6rem;
+}
+.pos-results, .pos-cart {
+  border: 1px solid #ccc;
+  border-radius: .5rem;
+  padding: 1rem;
+}
+.pos-results table, .pos-cart table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.pos-results th, .pos-results td,
+.pos-cart th, .pos-cart td {
+  text-align: left;
+  padding: .35rem .5rem;
+  border-bottom: 1px solid #eee;
+}
+.pos-total {
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+.pos-cart input[type="number"] {
+  width: 4.5rem;
+}
+.pos-checkout-note {
+  color: #555;
+}
+@media (max-width: 768px) {
+  .pos-layout {
+    grid-template-columns: 1fr;
+  }
+}
