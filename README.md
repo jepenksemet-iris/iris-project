@@ -2,7 +2,7 @@
 
 Platform Point of Sale (POS) berbasis web untuk toko retail, usaha kecil, dan UMKM. Arah pengembangan IRIS adalah menjadi platform operasional bisnis modular berbasis SaaS, bukan hanya aplikasi kasir.
 
-> **Status:** Dokumentasi / rancangan proyek. Repository ini saat ini berisi dokumentasi induk dan pemecahannya per topik. Daftar fitur di dokumen adalah peta ruang lingkup produk — **bukan** pernyataan bahwa semua fitur sudah selesai atau tersedia. Status implementasi harus ditentukan melalui audit kode dan pengujian.
+> **Status:** Tahap 2 — skeleton Flask (2026-11-25). Repository berisi dokumentasi proyek + kerangka aplikasi Flask yang bisa dijalankan (halaman placeholder dan `/health` di ketiga aplikasi). Modul operasional (kasir, produk, stok, pembelian, laporan, dst) **belum** diimplementasikan. Daftar fitur di dokumen adalah peta ruang lingkup produk — **bukan** pernyataan bahwa semua fitur sudah selesai atau tersedia.
 
 - **Nama proyek:** IRIS Platform
 - **Nama aplikasi:** POS IRIS
@@ -18,13 +18,36 @@ Pertahankan stack yang sudah dirancang — jangan diganti tanpa keputusan dan an
 - SQLite (`sqlite3`, database terpisah per tenant melalui `get_tenant_db`)
 - Dependensi yang pernah disebut: Flask-WTF, Flask-Limiter, Gunicorn, pytest, pytest-flask
 
-Komponen aplikasi yang diketahui (verifikasi dari repository/kode aktual sebelum digunakan):
+Komponen aplikasi (skeleton tahap 2 — sudah ada, masih placeholder):
 
-| Aplikasi | File | Fungsi |
-|---|---|---|
-| Landing | `landing_app.py` | Situs publik, informasi produk, pendaftaran |
-| Tenant | `tenant_app.py` | Aplikasi operasional milik tenant |
-| Super Admin | `superadmin_app.py` | Pengelolaan platform dan tenant |
+| Aplikasi | File | Port | Fungsi |
+|---|---|---|---|
+| Landing | `landing_app.py` | 5000 | Situs publik, informasi produk, pendaftaran (placeholder) |
+| Tenant | `tenant_app.py` | 5001 | Aplikasi operasional milik tenant (placeholder) |
+| Super Admin | `superadmin_app.py` | 5002 | Pengelolaan platform dan tenant (placeholder) |
+
+File pendukung: `config.py` (config dari environment), `iris_db.py` (`get_tenant_db` + validasi slug tenant), `templates/` (Jinja2), `tests/test_apps.py`, `requirements.txt`, `.env.example`.
+
+## Menjalankan skeleton (lokal)
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # lalu isi SECRET_KEY
+python landing_app.py    # http://127.0.0.1:5000
+python tenant_app.py     # http://127.0.0.1:5001/?tenant=toko-demo
+python superadmin_app.py # http://127.0.0.1:5002
+```
+
+Tes:
+
+```bash
+python -m pytest tests/ -q
+# Terakhir diuji lokal: 3 passed (2026-11-25)
+```
+
+> **Peringatan keamanan:** Super Admin dan Tenant di skeleton ini belum punya autentikasi/otorisasi, dan identitas tenant di `tenant_app.py` masih dari query `?tenant=` untuk keperluan lokal saja. Jangan mengekspos tiga aplikasi ini ke internet sebelum login dan RBAC ditambahkan. Secret hanya dari environment (`.env`, tidak di-commit).
 
 ## Dokumentasi
 

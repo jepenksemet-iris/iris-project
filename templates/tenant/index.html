@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Tenant {{ tenant }} — POS IRIS{% endblock %}
+{% block content %}
+<h1>Dashboard Tenant: {{ tenant }}</h1>
+<p>Database tenant: <code>{{ db_path }}</code></p>
+<p>Modul kasir, produk, stok, pembelian, penjualan, keuangan, dan laporan belum diimplementasikan — lihat <code>docs/MODULES.md</code>.</p>
+{% endblock %}

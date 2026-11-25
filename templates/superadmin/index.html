@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Super Admin — POS IRIS{% endblock %}
+{% block content %}
+<h1>Super Admin</h1>
+<p><strong>Peringatan:</strong> skeleton ini belum memiliki autentikasi/otorisasi. Jangan diekspos ke internet.</p>
+<h2>Tenant terdaftar</h2>
+{% if tenants %}
+<ul>
+  {% for t in tenants %}<li>{{ t }}</li>{% endfor %}
+</ul>
+{% else %}
+<p>Belum ada tenant.</p>
+{% endif %}
+{% endblock %}
