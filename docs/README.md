@@ -14,6 +14,8 @@ Dokumen induk (sumber kebenaran rancangan): [DOKUMENTASI_PROYEK_IRIS.md](DOKUMEN
 | [TESTING.md](TESTING.md) | Strategi audit dan pengujian |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Lingkungan pengembangan, deployment, tahapan pengembangan |
 | [TENANT_PROVISIONING.md](TENANT_PROVISIONING.md) | Alur pendaftaran dan Tenant Provisioning Engine |
+| [IPOS4_FEATURE_MATRIX.md](IPOS4_FEATURE_MATRIX.md) | Matriks fitur iPOS 4 vs implementasi IRIS, dengan bukti file/route/test |
+| [IRIS_UX_INFORMATION_ARCHITECTURE.md](IRIS_UX_INFORMATION_ARCHITECTURE.md) | Rancangan menu, sitemap, role, dan pola UX IRIS |
 | [CHANGELOG.md](CHANGELOG.md) | Catatan perubahan dokumentasi & keputusan |
 
 > Bedakan dengan jelas antara fitur yang sudah berjalan, sedang dikerjakan, dan masih berupa rencana. Perbarui dokumen setiap kali ada keputusan arsitektur, perubahan modul, perubahan paket harga, atau perubahan prosedur deployment.

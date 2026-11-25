@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-25 — Tahap 5: matriks iPOS 4 vs IRIS + rancangan UX
+
+- `docs/IPOS4_FEATURE_MATRIX.md` — audit read-only repo head `71ef6ec0` dibandingkan dengan benchmark iPOS 4 (9 menu utama). Setiap fitur dinilai `Sudah Ada dan Teruji` / `Parsial` / `Belum Ada` / `Perlu Keputusan Produk` / `Tidak Relevan` dengan bukti file/route/test. Temuan kunci: 14 tabel skema v1 ada, tetapi belum ada logika bisnis untuk `sales, purchases, stock_movements, cash_transactions`; produk hanya daftar baca saja; konsinyasi dan proses bulanan manual direkomendasikan tidak ditiru.
+- `docs/IRIS_UX_INFORMATION_ARCHITECTURE.md` — sitemap tenant, navigasi sidebar + topbar, dashboard per role, pola halaman daftar (referensi: daftar produk), pola form transaksi, pola kasir, alur utama, matriks hak akses, states dan aksesibilitas, urutan implementasi bertahap.
+- Koreksi dari pemeriksaan skema: `products` sudah punya `sku`, `barcode TEXT UNIQUE`, dan `min_stock` — dicatat di matriks sebagai kolom yang ada tanpa UI/logika.
+- `docs/README.md` diperbarui dengan indeks kedua dokumen baru. Tidak ada perubahan kode aplikasi; tes tidak berubah (10 passed sebelumnya).
+
 ## 2026-11-25 — Tahap 4: landing page POS IRIS
 
 - `templates/landing/index.html` — ditulis ulang penuh: header/nav (Fitur, Solusi, Cara Kerja, Harga, FAQ), hero + mockup kasir (HTML/CSS, data contoh), value strip, masalah, grid 9 fitur, showcase kasir/stok/laporan, cara kerja 4 langkah, 5 kartu solusi, 3 kartu harga, keamanan, FAQ accordion 7 pertanyaan, final CTA, footer. SEO: meta description + Open Graph, canonical posiris.biz.id.
