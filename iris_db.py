@@ -1,4 +1,4 @@
-"""Akses database SQLite per tenant (tahap 11: skema v5 + modul pembelian).
+"""Akses database SQLite per tenant (tahap 12: skema v6 + retur).
 
 Pola dari dokumen proyek:
     <DATA_DIR>/<tenant-slug>/iris.db
@@ -22,18 +22,21 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 _SCHEMA_PATH = Path(__file__).with_name("iris_schema.sql")
 
-# Jenis mutasi stok yang sah (skema v5). 'adjustment' dipertahankan
+# Jenis mutasi stok yang sah (skema v6). 'adjustment' dipertahankan
 # untuk kompatibilitas data lama; form baru memakai opening_balance /
 # adjustment_in / adjustment_out. 'sale_void' = mutasi pembalik
 # pembatalan penjualan (P1 Tahap 5); 'purchase_void' = mutasi pembalik
-# pembatalan pembelian (P1 Tahap 6); 'return' dicadangkan untuk retur.
+# pembatalan pembelian (P1 Tahap 6); 'return' = retur penjualan (stok
+# masuk) dan pembatalan retur penjualan (stok keluar, ref_type
+# 'return_void'); 'purchase_return' = retur pembelian (stok keluar)
+# dan pembatalan retur pembelian (stok masuk, ref_type 'return_void').
 STOCK_MOVEMENT_KINDS = (
     "sale", "purchase", "adjustment", "return", "transfer",
     "opening_balance", "adjustment_in", "adjustment_out",
-    "sale_void", "purchase_void",
+    "sale_void", "purchase_void", "purchase_return",
 )
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
@@ -273,8 +276,103 @@ def migrate_tenant_db(conn, from_version):
         from_version = 4
     if from_version == 4:
         _migrate_v4_to_v5(conn)
+        from_version = 5
+    if from_version == 5:
+        _migrate_v5_to_v6(conn)
         return
     raise ValueError(f"tidak ada jalur migrasi dari versi skema {from_version}")
+
+
+def _migrate_v5_to_v6(conn):
+    """v5 -> v6 (retur penjualan & pembelian).
+
+    - Tabel baru returns + return_items (CREATE TABLE IF NOT EXISTS
+      dari skema v6 — di sini dieksekusi langsung agar migrasi eksplisit).
+    - stock_movements dibuat ulang untuk menambah jenis 'purchase_return'
+      di CHECK (data disalin apa adanya, tanpa pemetaan jenis).
+    - Index baru returns/return_items.
+    """
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        with conn:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS returns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    kind TEXT NOT NULL CHECK (kind IN ('sale_return', 'purchase_return')),
+                    sale_id INTEGER REFERENCES sales (id) ON DELETE SET NULL,
+                    purchase_id INTEGER REFERENCES purchases (id) ON DELETE SET NULL,
+                    outlet_id INTEGER NOT NULL REFERENCES outlets (id),
+                    user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
+                    return_no TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL DEFAULT 'completed'
+                        CHECK (status IN ('completed', 'cancelled')),
+                    total INTEGER NOT NULL DEFAULT 0 CHECK (total >= 0),
+                    reason TEXT NOT NULL,
+                    notes TEXT NOT NULL DEFAULT '',
+                    idempotency_key TEXT UNIQUE,
+                    idempotency_payload TEXT,
+                    cancel_reason TEXT,
+                    cancelled_by INTEGER REFERENCES users (id) ON DELETE SET NULL,
+                    cancelled_at TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+                CREATE TABLE IF NOT EXISTS return_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    return_id INTEGER NOT NULL REFERENCES returns (id) ON DELETE CASCADE,
+                    product_id INTEGER NOT NULL REFERENCES products (id),
+                    product_name TEXT NOT NULL DEFAULT '',
+                    sku TEXT,
+                    unit TEXT,
+                    qty REAL NOT NULL CHECK (qty > 0),
+                    price INTEGER NOT NULL CHECK (price >= 0)
+                );
+                """
+            )
+            conn.execute(
+                "CREATE TABLE stock_movements_new ("
+                " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                " product_id INTEGER NOT NULL REFERENCES products (id),"
+                " outlet_id INTEGER NOT NULL REFERENCES outlets (id),"
+                " qty REAL NOT NULL,"
+                " kind TEXT NOT NULL CHECK (kind IN ('sale', 'purchase',"
+                " 'adjustment', 'return', 'transfer', 'opening_balance',"
+                " 'adjustment_in', 'adjustment_out', 'sale_void',"
+                " 'purchase_void', 'purchase_return')),"
+                " ref_type TEXT NOT NULL DEFAULT '',"
+                " ref_id INTEGER,"
+                " note TEXT NOT NULL DEFAULT '',"
+                " user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,"
+                " effective_date TEXT,"
+                " created_at TEXT NOT NULL DEFAULT (datetime('now')))"
+            )
+            conn.execute(
+                "INSERT INTO stock_movements_new"
+                " (id, product_id, outlet_id, qty, kind, ref_type, ref_id,"
+                "  note, user_id, effective_date, created_at)"
+                " SELECT id, product_id, outlet_id, qty, kind, ref_type,"
+                "  ref_id, note, user_id, effective_date, created_at"
+                " FROM stock_movements"
+            )
+            conn.execute("DROP TABLE stock_movements")
+            conn.execute("ALTER TABLE stock_movements_new RENAME TO stock_movements")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_stock_movements_product"
+                " ON stock_movements (product_id, created_at)"
+            )
+            for ddl in (
+                "CREATE INDEX IF NOT EXISTS idx_returns_created"
+                " ON returns (created_at)",
+                "CREATE INDEX IF NOT EXISTS idx_returns_sale"
+                " ON returns (sale_id)",
+                "CREATE INDEX IF NOT EXISTS idx_returns_purchase"
+                " ON returns (purchase_id)",
+                "CREATE INDEX IF NOT EXISTS idx_return_items_return"
+                " ON return_items (return_id)",
+            ):
+                conn.execute(ddl)
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
 
 
 def _migrate_v4_to_v5(conn):
@@ -1128,6 +1226,19 @@ def void_sale(conn, sale_id, user_id, reason):
             if existing:
                 raise ValueError(
                     "mutasi pembalik untuk transaksi ini sudah ada")
+            # Penjualan yang sudah diretur (sebagian/penuh) tidak boleh
+            # dibatalkan: stok barang yang diretur sudah kembali, jadi
+            # void akan mengembalikan stok dua kali. Batalkan retur
+            # terlebih dahulu bila memang perlu.
+            ret = conn.execute(
+                "SELECT 1 FROM returns WHERE kind = 'sale_return'"
+                " AND sale_id = ? AND status = 'completed' LIMIT 1",
+                (sale_id,),
+            ).fetchone()
+            if ret:
+                raise ValueError(
+                    "penjualan yang sudah diretur tidak dapat dibatalkan;"
+                    " batalkan retur terlebih dahulu")
             items = conn.execute(
                 "SELECT * FROM sale_items WHERE sale_id = ? ORDER BY id",
                 (sale_id,),
@@ -1434,6 +1545,17 @@ def cancel_purchase(conn, purchase_id, user_id, reason):
             if existing:
                 raise ValueError(
                     "mutasi pembalik untuk pembelian ini sudah ada")
+            # Pembelian yang sudah diretur tidak boleh dibatalkan
+            # (alasan sama seperti void_sale: stok bisa kembali dua kali).
+            ret = conn.execute(
+                "SELECT 1 FROM returns WHERE kind = 'purchase_return'"
+                " AND purchase_id = ? AND status = 'completed' LIMIT 1",
+                (purchase_id,),
+            ).fetchone()
+            if ret:
+                raise ValueError(
+                    "pembelian yang sudah diretur tidak dapat dibatalkan;"
+                    " batalkan retur terlebih dahulu")
             items = conn.execute(
                 "SELECT * FROM purchase_items WHERE purchase_id = ?"
                 " ORDER BY id",
@@ -1464,6 +1586,392 @@ def cancel_purchase(conn, purchase_id, user_id, reason):
             )
             if cur.rowcount != 1:
                 raise ValueError("pembelian sudah berubah status")
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.isolation_level = wasolation
+    return True
+
+
+# ----------------------------------------------------------------------
+# Retur penjualan & pembelian (P1 Tahap 7)
+# ----------------------------------------------------------------------
+RETURN_KINDS = ("sale_return", "purchase_return")
+RETURN_STATUSES = ("completed", "cancelled")
+
+
+def _generate_return_no(conn, kind):
+    prefix = "RS-" if kind == "sale_return" else "RP-"
+    today = date.today().strftime("%Y%m%d")
+    prefix = f"{prefix}{today}-"
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM returns WHERE return_no LIKE ?",
+        (prefix + "%",),
+    ).fetchone()
+    return f"{prefix}{row['n'] + 1:04d}"
+
+
+def _returned_qty(conn, kind, origin_id, product_id):
+    """Total kuantitas yang sudah diretur (retur 'completed' saja)
+    untuk satu produk pada satu transaksi asal."""
+    col = "sale_id" if kind == "sale_return" else "purchase_id"
+    row = conn.execute(
+        "SELECT COALESCE(SUM(i.qty), 0) AS n FROM return_items i"
+        " JOIN returns r ON r.id = i.return_id"
+        f" WHERE r.kind = ? AND r.{col} = ? AND r.status = 'completed'"
+        " AND i.product_id = ?",
+        (kind, origin_id, product_id),
+    ).fetchone()
+    return row["n"]
+
+
+def _create_return(conn, kind, origin, user_id, items, reason, notes,
+                   idempotency_key=None, idempotency_payload=None):
+    """Inti pembuatan retur (dipanggil dari create_sale_return /
+    create_purchase_return). Atomik di bawah BEGIN IMMEDIATE.
+
+    - origin: dict transaksi asal + items-nya (dari get_sale/get_purchase).
+    - items: [{"product_id", "qty"}] — harga diambil dari detail asal.
+    - Retur penjualan: stok masuk kind='return'.
+      Retur pembelian: stok keluar kind='purchase_return' (stok dicek).
+    - Transaksi asal yang diretur PENUH menjadi status 'returned'.
+    - Idempotensi: token + hash payload; replay mengembalikan retur
+      yang sama; token sama + payload beda ditolak.
+    """
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("alasan retur wajib diisi")
+    if len(reason) > 500:
+        raise ValueError("alasan retur maksimal 500 karakter")
+    if not items:
+        raise ValueError("retur harus memiliki minimal satu item")
+    if len(items) > MAX_CART_ITEMS:
+        raise ValueError("retur melebihi batas item")
+    wasolation = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        for attempt in range(3):
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    if idempotency_key:
+                        existing = conn.execute(
+                            "SELECT id, idempotency_payload FROM returns"
+                            " WHERE idempotency_key = ?",
+                            (idempotency_key,),
+                        ).fetchone()
+                        if existing is not None:
+                            payload_hash = hashlib.sha256(
+                                (idempotency_payload or "").encode()
+                            ).hexdigest()
+                            if existing["idempotency_payload"] != payload_hash:
+                                raise ValueError(
+                                    "token idempotensi sudah dipakai"
+                                    " untuk data berbeda")
+                            conn.execute("COMMIT")
+                            return existing["id"]
+                    origin_row = origin["sale" if kind == "sale_return" else "purchase"]
+                    origin_items = {i["product_id"]: i for i in origin["items"]}
+                    total = 0
+                    lines = []
+                    for item in items:
+                        pid = item.get("product_id")
+                        src = origin_items.get(pid)
+                        if src is None:
+                            raise ValueError(
+                                "produk tidak ada pada transaksi asal")
+                        qty = float(item.get("qty", 0))
+                        if qty <= 0:
+                            raise ValueError(
+                                "kuantitas retur harus lebih dari 0")
+                        already = _returned_qty(
+                            conn, kind, origin_row["id"], pid)
+                        if already + qty > src["qty"]:
+                            raise ValueError(
+                                f"kuantitas retur melebihi sisa"
+                                f" ({src['product_name']!r}: terjual/diterima"
+                                f" {src['qty']:g}, sudah diretur"
+                                f" {already:g})")
+                        price = src["price"]
+                        if kind == "sale_return":
+                            price = src["price"] - (src["discount"] or 0)
+                        subtotal = int(round(price * qty))
+                        total += subtotal
+                        lines.append({
+                            "src": src, "qty": qty, "price": price,
+                        })
+                    if kind == "purchase_return":
+                        for line in lines:
+                            current = get_stock_qty(
+                                conn, line["src"]["product_id"],
+                                origin_row["outlet_id"])
+                            if current < line["qty"]:
+                                raise ValueError(
+                                    f"stok tidak mencukupi untuk retur"
+                                    f" (produk"
+                                    f" {line['src']['product_name']!r}: stok"
+                                    f" {current:g}, perlu {line['qty']:g})")
+                    return_no = _generate_return_no(conn, kind)
+                    payload_hash = None
+                    if idempotency_key:
+                        payload_hash = hashlib.sha256(
+                            (idempotency_payload or "").encode()
+                        ).hexdigest()
+                    col = "sale_id" if kind == "sale_return" else "purchase_id"
+                    cur = conn.execute(
+                        "INSERT INTO returns"
+                        f" (kind, {col}, outlet_id, user_id, return_no,"
+                        "  status, total, reason, notes, idempotency_key,"
+                        "  idempotency_payload)"
+                        " VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?)",
+                        (kind, origin_row["id"], origin_row["outlet_id"],
+                         user_id, return_no, total, reason,
+                         (notes or "").strip(), idempotency_key, payload_hash),
+                    )
+                    return_id = cur.lastrowid
+                    stock_kind = "return" if kind == "sale_return" else "purchase_return"
+                    stock_delta = 1 if kind == "sale_return" else -1
+                    for line in lines:
+                        src = line["src"]
+                        conn.execute(
+                            "INSERT INTO return_items"
+                            " (return_id, product_id, product_name, sku,"
+                            "  unit, qty, price)"
+                            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (return_id, src["product_id"],
+                             src["product_name"], src["sku"], src["unit"],
+                             line["qty"], line["price"]),
+                        )
+                        _apply_stock_change(
+                            conn, src["product_id"],
+                            origin_row["outlet_id"],
+                            stock_delta * line["qty"],
+                            note=f"Retur {return_no} dari"
+                                 f" {origin_row['invoice_no']}",
+                            user_id=user_id, kind=stock_kind,
+                            ref_type="return", ref_id=return_id,
+                        )
+                    # Transaksi asal menjadi 'returned' bila semua item
+                    # sudah diretur penuh.
+                    fully = all(
+                        _returned_qty(conn, kind, origin_row["id"], i["product_id"])
+                        >= i["qty"] for i in origin["items"]
+                    )
+                    if fully:
+                        table = "sales" if kind == "sale_return" else "purchases"
+                        conn.execute(
+                            f"UPDATE {table} SET status = 'returned'"
+                            " WHERE id = ?",
+                            (origin_row["id"],),
+                        )
+                    conn.execute("COMMIT")
+                    return return_id
+                except BaseException:
+                    conn.execute("ROLLBACK")
+                    raise
+            except sqlite3.IntegrityError as exc:
+                if "returns.return_no" in str(exc) and attempt < 2:
+                    continue
+                raise
+    finally:
+        conn.isolation_level = wasolation
+
+
+def create_sale_return(conn, sale_id, user_id, items, reason, notes="",
+                       idempotency_key=None, idempotency_payload=None):
+    """Retur penjualan: barang kembali, stok bertambah.
+
+    Hanya penjualan berstatus 'completed'/'pending'. Penjualan yang
+    sudah dibatalkan ('void') ditolak. Harga dari snapshot sale_items.
+    """
+    data = get_sale(conn, sale_id)
+    if data is None:
+        raise ValueError("penjualan tidak ditemukan")
+    if data["sale"]["status"] == "void":
+        raise ValueError("penjualan yang sudah dibatalkan tidak dapat diretur")
+    if data["sale"]["status"] not in ("completed", "pending"):
+        raise ValueError(
+            f"penjualan berstatus {data['sale']['status']!r} tidak dapat diretur")
+    return _create_return(conn, "sale_return", data, user_id, items,
+                          reason, notes, idempotency_key,
+                          idempotency_payload)
+
+
+def create_purchase_return(conn, purchase_id, user_id, items, reason,
+                           notes="", idempotency_key=None,
+                           idempotency_payload=None):
+    """Retur pembelian: barang kembali ke pemasok, stok berkurang.
+
+    Hanya pembelian berstatus 'received'. Harga beli dari snapshot
+    purchase_items. Stok harus mencukupi.
+    """
+    data = get_purchase(conn, purchase_id)
+    if data is None:
+        raise ValueError("pembelian tidak ditemukan")
+    if data["purchase"]["status"] != "received":
+        raise ValueError(
+            f"pembelian berstatus {data['purchase']['status']!r} tidak dapat diretur")
+    return _create_return(conn, "purchase_return", data, user_id, items,
+                          reason, notes, idempotency_key,
+                          idempotency_payload)
+
+
+def get_return(conn, return_id):
+    row = conn.execute(
+        "SELECT r.*, u.full_name AS created_by_name,"
+        " v.full_name AS cancelled_by_name,"
+        " s.invoice_no AS sale_invoice, p.invoice_no AS purchase_invoice,"
+        " p.supplier_id FROM returns r"
+        " LEFT JOIN users u ON u.id = r.user_id"
+        " LEFT JOIN users v ON v.id = r.cancelled_by"
+        " LEFT JOIN sales s ON s.id = r.sale_id"
+        " LEFT JOIN purchases p ON p.id = r.purchase_id"
+        " WHERE r.id = ?",
+        (return_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    items = conn.execute(
+        "SELECT * FROM return_items WHERE return_id = ? ORDER BY id",
+        (return_id,),
+    ).fetchall()
+    supplier_name = None
+    if row["supplier_id"]:
+        sup = get_supplier(conn, row["supplier_id"])
+        supplier_name = sup["name"] if sup else None
+    return {"return": row, "items": items, "supplier_name": supplier_name}
+
+
+def list_returns(conn, q=None, kind=None, status=None, date_from=None,
+                 date_to=None, order="newest", limit=100):
+    sql = (
+        "SELECT r.*, s.invoice_no AS sale_invoice,"
+        " p.invoice_no AS purchase_invoice FROM returns r"
+        " LEFT JOIN sales s ON s.id = r.sale_id"
+        " LEFT JOIN purchases p ON p.id = r.purchase_id"
+    )
+    args, where = [], []
+    if q:
+        where.append("r.return_no LIKE ?")
+        args.append(f"%{q}%")
+    if kind in RETURN_KINDS:
+        where.append("r.kind = ?")
+        args.append(kind)
+    if status in RETURN_STATUSES:
+        where.append("r.status = ?")
+        args.append(status)
+    if date_from:
+        where.append("date(r.created_at) >= ?")
+        args.append(date_from)
+    if date_to:
+        where.append("date(r.created_at) <= ?")
+        args.append(date_to)
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    if order == "oldest":
+        sql += " ORDER BY r.created_at ASC, r.id ASC LIMIT ?"
+    else:
+        sql += " ORDER BY r.created_at DESC, r.id DESC LIMIT ?"
+    args.append(limit)
+    return conn.execute(sql, args).fetchall()
+
+
+def list_returns_for_origin(conn, kind, origin_id):
+    col = "sale_id" if kind == "sale_return" else "purchase_id"
+    return conn.execute(
+        f"SELECT * FROM returns WHERE kind = ? AND {col} = ?"
+        " ORDER BY created_at DESC, id DESC",
+        (kind, origin_id),
+    ).fetchall()
+
+
+def cancel_return(conn, return_id, user_id, reason):
+    """Batalkan retur yang sudah diproses, secara atomik.
+
+    Mutasi kompensasi dengan ref_type='return_void': retur penjualan
+    (dulu menambah stok) dibalik dengan mutasi keluar; retur pembelian
+    (dulu mengurangi stok) dibalik dengan mutasi masuk. Pembatalan
+    retur penjualan ditolak bila stok tidak mencukupi. Transaksi asal
+    yang tadinya 'returned' kembali ke status sebelumnya ('completed'
+    untuk penjualan, 'received' untuk pembelian) bila retur ini
+    dibatalkan. Retur, item, dan mutasi retur asli tidak dihapus.
+    """
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("alasan pembatalan wajib diisi")
+    if len(reason) > 500:
+        raise ValueError("alasan pembatalan maksimal 500 karakter")
+    wasolation = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = conn.execute(
+                "SELECT * FROM returns WHERE id = ?", (return_id,)
+            ).fetchone()
+            if row is None:
+                raise ValueError("retur tidak ditemukan")
+            if row["status"] == "cancelled":
+                raise ValueError("retur sudah dibatalkan")
+            if row["status"] != "completed":
+                raise ValueError(
+                    f"retur berstatus {row['status']!r} tidak dapat dibatalkan")
+            existing = conn.execute(
+                "SELECT 1 FROM stock_movements"
+                " WHERE ref_type = 'return_void' AND ref_id = ? LIMIT 1",
+                (return_id,),
+            ).fetchone()
+            if existing:
+                raise ValueError(
+                    "mutasi pembalik untuk retur ini sudah ada")
+            items = conn.execute(
+                "SELECT * FROM return_items WHERE return_id = ? ORDER BY id",
+                (return_id,),
+            ).fetchall()
+            if row["kind"] == "sale_return":
+                stock_kind, delta = "return", -1
+                for item in items:
+                    current = get_stock_qty(conn, item["product_id"],
+                                            row["outlet_id"])
+                    if current < item["qty"]:
+                        raise ValueError(
+                            f"stok tidak mencukupi untuk membatalkan retur"
+                            f" (produk {item['product_name']!r}: stok"
+                            f" {current:g}, perlu {item['qty']:g})")
+            else:
+                stock_kind, delta = "purchase_return", 1
+            for item in items:
+                _apply_stock_change(
+                    conn, item["product_id"], row["outlet_id"],
+                    delta * item["qty"],
+                    note=f"Pembatalan retur {row['return_no']}: {reason}",
+                    user_id=user_id, kind=stock_kind,
+                    ref_type="return_void", ref_id=return_id,
+                )
+            cur = conn.execute(
+                "UPDATE returns SET status = 'cancelled',"
+                " cancel_reason = ?, cancelled_by = ?,"
+                " cancelled_at = datetime('now')"
+                " WHERE id = ? AND status = 'completed'",
+                (reason, user_id, return_id),
+            )
+            if cur.rowcount != 1:
+                raise ValueError("retur sudah berubah status")
+            # Kembalikan status transaksi asal bila tadinya 'returned'.
+            if row["kind"] == "sale_return" and row["sale_id"]:
+                conn.execute(
+                    "UPDATE sales SET status = 'completed'"
+                    " WHERE id = ? AND status = 'returned'",
+                    (row["sale_id"],),
+                )
+            elif row["kind"] == "purchase_return" and row["purchase_id"]:
+                conn.execute(
+                    "UPDATE purchases SET status = 'received'"
+                    " WHERE id = ? AND status = 'returned'",
+                    (row["purchase_id"],),
+                )
             conn.execute("COMMIT")
         except BaseException:
             conn.execute("ROLLBACK")

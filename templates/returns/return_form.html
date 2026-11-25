@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Retur {{ 'Penjualan' if kind == 'sale_return' else 'Pembelian' }} — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Retur {{ 'Penjualan' if kind == 'sale_return' else 'Pembelian' }}</h1>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul>
+  {% for category, message in messages %}
+  <li><strong>{{ category }}:</strong> {{ message }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+{% if kind == 'sale_return' %}
+<p>Transaksi asal: <a href="/sales/{{ origin.sale.id }}">{{ origin.sale.invoice_no }}</a> (total Rp {{ origin.sale.total }})</p>
+<p><a href="/sales/{{ origin.sale.id }}">Kembali ke detail penjualan</a></p>
+<p>Barang yang diretur masuk kembali ke stok. Nilai retur dihitung dari harga jual saat transaksi asal.</p>
+{% else %}
+<p>Transaksi asal: <a href="/purchases/{{ origin.purchase.id }}">{{ origin.purchase.invoice_no }}</a> (total Rp {{ origin.purchase.total }})</p>
+<p><a href="/purchases/{{ origin.purchase.id }}">Kembali ke detail pembelian</a></p>
+<p>Barang yang diretur dikembalikan ke pemasok dan stok berkurang. Nilai retur dihitung dari harga beli saat transaksi asal.</p>
+{% endif %}
+<form method="post">
+  {{ form.hidden_tag() }}
+  <p>{{ form.reason.label }}<br>{{ form.reason(size=60) }}{% for e in form.reason.errors %} <span>{{ e }}</span>{% endfor %}</p>
+  <p>{{ form.notes.label }}<br>{{ form.notes(size=60) }}</p>
+  <table>
+    <tr><th>Produk</th><th>Terjual/Diterima</th><th>Sudah diretur</th><th>Sisa bisa diretur</th><th>Harga satuan</th><th>Kuantitas retur</th></tr>
+    {% for r in returnable %}
+    <tr>
+      <td>{{ r.item.product_name }} ({{ r.item.sku or '-' }})</td>
+      <td>{{ r.item.qty }}</td>
+      <td>{{ r.returned }}</td>
+      <td>{{ r.remaining }}</td>
+      <td>Rp {{ r.item.price - (r.item.discount or 0) if kind == 'sale_return' else r.item.price }}</td>
+      <td>
+        <input type="hidden" name="product_id" value="{{ r.item.product_id }}">
+        <input type="number" name="qty" step="any" min="0" max="{{ r.remaining }}" value="0" {% if r.remaining <= 0 %}disabled{% endif %}>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p>{{ form.submit() }}</p>
+</form>
+{% endblock %}

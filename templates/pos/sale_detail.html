@@ -63,6 +63,17 @@
   <button type="submit">Konfirmasi pembayaran</button>
 </form>
 {% endif %}
+{% if returns %}
+<h2>Retur dari transaksi ini</h2>
+<ul>
+  {% for r in returns %}
+  <li><a href="/returns/{{ r.id }}">{{ r.return_no }}</a> — Rp {{ r.total }} ({{ r.status }})</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% if can_return and sale.status in ['completed', 'pending'] %}
+<p><a href="/sales/{{ sale.id }}/return">Buat retur penjualan</a></p>
+{% endif %}
 {% if can_void and sale.status in ['completed', 'pending'] %}
 <hr>
 <h2>Batalkan transaksi</h2>

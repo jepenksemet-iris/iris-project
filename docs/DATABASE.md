@@ -14,6 +14,16 @@ tenants/
 
 Akses database tenant dilakukan melalui `get_tenant_db(slug)` di `iris_db.py`, dan skema diterapkan oleh `init_tenant_db(slug)` dari `iris_schema.sql`.
 
+## Skema v6 (P1 Tahap 7, 2026-11-25)
+
+Versi skema dicatat di `PRAGMA user_version = 6`. Database lama dimigrasi otomatis oleh `iris_db.migrate_tenant_db()` (rantai v1→…→v6).
+
+Perubahan v6 (retur penjualan & pembelian):
+- Tabel baru `returns` (kind `sale_return`/`purchase_return`, nomor `RS-`/`RP-YYYYMMDD-NNNN`, status `completed`/`cancelled`, alasan wajib, total dari harga historis asal, `idempotency_key` UNIQUE, jejak pembatalan `cancel_*`) dan `return_items` (snapshot produk + qty + harga historis).
+- `stock_movements.kind`: tambah `'purchase_return'` (retur penjualan memakai `'return'` yang sudah ada). Pembatalan retur memakai `ref_type='return_void'`.
+- Aturan yang ditegakkan service: retur penjualan hanya untuk penjualan `completed`/`pending` (bukan `void`); retur pembelian hanya untuk pembelian `received`; kumulatif retur per produk tidak boleh melebihi kuantitas asal; retur pembelian ditolak bila stok tidak mencukupi; penjualan/pembelian yang diretur penuh menjadi status `returned`; pembatalan penjualan/pembelian diblokir bila sudah ada retur yang diproses (agar stok tidak kembali dua kali); pembatalan retur memakai mutasi kompensasi dan mengembalikan status asal bila tadinya `returned`.
+- Nilai retur adalah informasi transaksi — pengembalian uang/utang **tidak** diproses otomatis (belum ada modul keuangan).
+
 ## Skema v5 (P1 Tahap 6, 2026-11-25)
 
 Versi skema dicatat di `PRAGMA user_version = 5`. Database lama dimigrasi otomatis oleh `iris_db.migrate_tenant_db()` (rantai v1→v2→v3→v4→v5).

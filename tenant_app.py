@@ -20,6 +20,7 @@ Jalankan:
 atau:
     flask --app tenant_app run --port 5001
 """
+import json
 import os
 import sqlite3
 import uuid
@@ -48,6 +49,7 @@ from forms import (
     LoginForm,
     ProductForm,
     PurchaseForm,
+    ReturnForm,
     StockAdjustForm,
     SupplierForm,
     VoidForm,
@@ -56,17 +58,23 @@ from iris_auth import TenantUser, require_role, setup_auth
 from iris_db import (
     PAYMENT_METHODS,
     PURCHASE_STATUSES,
+    RETURN_KINDS,
+    RETURN_STATUSES,
     SALE_STATUSES,
     adjust_stock,
     cancel_purchase,
+    cancel_return,
     confirm_payment,
     create_product,
     create_purchase,
+    create_purchase_return,
     create_sale,
+    create_sale_return,
     create_supplier,
     create_user,
     get_default_outlet,
     get_purchase,
+    get_return,
     get_sale,
     get_supplier,
     get_or_create_category,
@@ -78,8 +86,11 @@ from iris_db import (
     init_tenant_db,
     list_categories,
     list_outlets,
+    _returned_qty,
     list_products,
     list_purchases,
+    list_returns,
+    list_returns_for_origin,
     list_sales,
     list_stock_movements,
     list_suppliers,
@@ -526,6 +537,8 @@ def create_app(config_class=None):
         conn = _db(slug)
         try:
             data = get_sale(conn, sale_id)
+            returns = (list_returns_for_origin(conn, "sale_return", sale_id)
+                       if data is not None else [])
         finally:
             conn.close()
         if data is None:
@@ -535,12 +548,15 @@ def create_app(config_class=None):
             "Lunas" if sale["status"] == "completed" and sale["paid"] >= sale["total"]
             else "Belum terverifikasi" if sale["status"] == "pending"
             else "Dibatalkan" if sale["status"] == "void"
+            else "Diretur" if sale["status"] == "returned"
             else sale["status"])
         return render_template(
             "pos/sale_detail.html", tenant=slug, **data,
             confirm_form=ConfirmForm(), void_form=VoidForm(),
             payment_status=payment_status,
             can_void=current_user.role in ("owner", "admin"),
+            returns=returns,
+            can_return=current_user.role in ("owner", "admin"),
         )
 
     @app.get("/sales/<int:sale_id>/receipt")
@@ -803,6 +819,9 @@ def create_app(config_class=None):
         conn = _db(slug)
         try:
             data = get_purchase(conn, purchase_id)
+            returns = (list_returns_for_origin(conn, "purchase_return",
+                                               purchase_id)
+                       if data is not None else [])
         finally:
             conn.close()
         if data is None:
@@ -811,6 +830,8 @@ def create_app(config_class=None):
             "purchases/purchase_detail.html", tenant=slug, **data,
             void_form=VoidForm(),
             can_cancel=current_user.role in ("owner", "admin"),
+            returns=returns,
+            can_return=current_user.role in ("owner", "admin"),
         )
 
     @app.post("/purchases/<int:purchase_id>/cancel")
@@ -840,6 +861,224 @@ def create_app(config_class=None):
             conn.close()
         return redirect(url_for("purchase_detail",
                                 purchase_id=purchase_id))
+
+    # ------------------------------------------------------------------
+    # Retur penjualan & pembelian (P1 Tahap 7)
+    # ------------------------------------------------------------------
+    def _parse_return_items():
+        """Baca item retur dari form: product_id/qty berulang.
+        Baris dengan qty kosong/0 diabaikan."""
+        pids = request.form.getlist("product_id")
+        qtys = request.form.getlist("qty")
+        if len(pids) != len(qtys):
+            raise ValueError("baris item retur tidak konsisten")
+        items = []
+        for pid, qty in zip(pids, qtys):
+            if not pid:
+                continue
+            try:
+                qty_val = float(qty)
+            except (TypeError, ValueError):
+                raise ValueError("kuantitas retur tidak valid")
+            if qty_val <= 0:
+                continue
+            try:
+                product_id = int(pid)
+            except (TypeError, ValueError):
+                raise ValueError("produk retur tidak valid")
+            items.append({"product_id": product_id, "qty": qty_val})
+        return items
+
+    def _returnable_items(conn, kind, origin_id, origin_items):
+        """Item asal + sisa kuantitas yang masih bisa diretur."""
+        out = []
+        for item in origin_items:
+            returned = _returned_qty(conn, kind, origin_id,
+                                     item["product_id"])
+            remaining = item["qty"] - returned
+            out.append({"item": item, "returned": returned,
+                        "remaining": remaining})
+        return out
+
+    @app.route("/sales/<int:sale_id>/return", methods=["GET", "POST"])
+    @require_role("owner", "admin")
+    def sale_return(sale_id):
+        slug = session["tenant"]
+        conn = _db(slug)
+        try:
+            data = get_sale(conn, sale_id)
+            if data is None:
+                abort(404)
+            returnable = _returnable_items(conn, "sale_return", sale_id,
+                                           data["items"])
+        finally:
+            conn.close()
+        form = ReturnForm()
+        if request.method == "GET" and not form.idempotency_key.data:
+            form.idempotency_key.data = uuid.uuid4().hex
+        if form.validate_on_submit():
+            try:
+                items = _parse_return_items()
+            except ValueError as exc:
+                flash(str(exc), "error")
+                return render_template(
+                    "returns/return_form.html", tenant=slug, form=form,
+                    kind="sale_return", origin=data, returnable=returnable)
+            payload = json.dumps(
+                {"sale_id": sale_id, "items": items,
+                 "reason": form.reason.data}, sort_keys=True)
+            conn = _db(slug)
+            try:
+                try:
+                    return_id = create_sale_return(
+                        conn, sale_id, current_user.row_id, items,
+                        form.reason.data, form.notes.data,
+                        idempotency_key=form.idempotency_key.data,
+                        idempotency_payload=payload,
+                    )
+                except (ValueError, sqlite3.IntegrityError) as exc:
+                    flash(str(exc), "error")
+                    return render_template(
+                        "returns/return_form.html", tenant=slug, form=form,
+                        kind="sale_return", origin=data,
+                        returnable=returnable)
+            finally:
+                conn.close()
+            flash("Retur penjualan tersimpan dan stok bertambah.", "success")
+            return redirect(url_for("return_detail", return_id=return_id))
+        return render_template(
+            "returns/return_form.html", tenant=slug, form=form,
+            kind="sale_return", origin=data, returnable=returnable)
+
+    @app.route("/purchases/<int:purchase_id>/return",
+               methods=["GET", "POST"])
+    @require_role("owner", "admin")
+    def purchase_return(purchase_id):
+        slug = session["tenant"]
+        conn = _db(slug)
+        try:
+            data = get_purchase(conn, purchase_id)
+            if data is None:
+                abort(404)
+            returnable = _returnable_items(conn, "purchase_return",
+                                           purchase_id, data["items"])
+        finally:
+            conn.close()
+        form = ReturnForm()
+        if request.method == "GET" and not form.idempotency_key.data:
+            form.idempotency_key.data = uuid.uuid4().hex
+        if form.validate_on_submit():
+            try:
+                items = _parse_return_items()
+            except ValueError as exc:
+                flash(str(exc), "error")
+                return render_template(
+                    "returns/return_form.html", tenant=slug, form=form,
+                    kind="purchase_return", origin=data,
+                    returnable=returnable)
+            payload = json.dumps(
+                {"purchase_id": purchase_id, "items": items,
+                 "reason": form.reason.data}, sort_keys=True)
+            conn = _db(slug)
+            try:
+                try:
+                    return_id = create_purchase_return(
+                        conn, purchase_id, current_user.row_id, items,
+                        form.reason.data, form.notes.data,
+                        idempotency_key=form.idempotency_key.data,
+                        idempotency_payload=payload,
+                    )
+                except (ValueError, sqlite3.IntegrityError) as exc:
+                    flash(str(exc), "error")
+                    return render_template(
+                        "returns/return_form.html", tenant=slug, form=form,
+                        kind="purchase_return", origin=data,
+                        returnable=returnable)
+            finally:
+                conn.close()
+            flash("Retur pembelian tersimpan dan stok berkurang.", "success")
+            return redirect(url_for("return_detail", return_id=return_id))
+        return render_template(
+            "returns/return_form.html", tenant=slug, form=form,
+            kind="purchase_return", origin=data, returnable=returnable)
+
+    @app.get("/returns")
+    @login_required
+    def returns_list():
+        from datetime import datetime
+
+        def _valid_date(value):
+            try:
+                datetime.strptime(value, "%Y-%m-%d")
+                return value
+            except (TypeError, ValueError):
+                return None
+
+        slug = session["tenant"]
+        q = (request.args.get("q") or "").strip()
+        kind = request.args.get("jenis") or ""
+        status = request.args.get("status") or ""
+        date_from = _valid_date(request.args.get("dari") or "")
+        date_to = _valid_date(request.args.get("sampai") or "")
+        order = request.args.get("urut") or "newest"
+        if order not in ("newest", "oldest"):
+            order = "newest"
+        conn = _db(slug)
+        try:
+            rows = list_returns(conn, q=q or None, kind=kind or None,
+                                status=status or None,
+                                date_from=date_from, date_to=date_to,
+                                order=order)
+        finally:
+            conn.close()
+        return render_template(
+            "returns/returns_list.html", tenant=slug, returns=rows, q=q,
+            kind=kind, status=status, date_from=date_from or "",
+            date_to=date_to or "", order=order, kinds=RETURN_KINDS,
+            statuses=RETURN_STATUSES,
+        )
+
+    @app.get("/returns/<int:return_id>")
+    @login_required
+    def return_detail(return_id):
+        slug = session["tenant"]
+        conn = _db(slug)
+        try:
+            data = get_return(conn, return_id)
+        finally:
+            conn.close()
+        if data is None:
+            abort(404)
+        return render_template(
+            "returns/return_detail.html", tenant=slug, **data,
+            void_form=VoidForm(),
+            can_cancel=current_user.role in ("owner", "admin"),
+        )
+
+    @app.post("/returns/<int:return_id>/cancel")
+    @require_role("owner", "admin")
+    def return_cancel(return_id):
+        slug = session["tenant"]
+        form = VoidForm()
+        if not form.validate_on_submit():
+            for field_errors in form.errors.values():
+                for err in field_errors:
+                    flash(err, "error")
+            return redirect(url_for("return_detail", return_id=return_id))
+        conn = _db(slug)
+        try:
+            if get_return(conn, return_id) is None:
+                abort(404)
+            try:
+                cancel_return(conn, return_id, current_user.row_id,
+                              form.reason.data)
+            except (ValueError, sqlite3.IntegrityError) as exc:
+                flash(str(exc), "error")
+            else:
+                flash("Retur dibatalkan dan stok dikembalikan.", "success")
+        finally:
+            conn.close()
+        return redirect(url_for("return_detail", return_id=return_id))
 
     @app.post("/sales/<int:sale_id>/confirm-payment")
     @require_role("owner", "admin")

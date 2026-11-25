@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Retur {{ return.return_no }} — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Retur {{ return.return_no }}</h1>
+<p><a href="/returns">Kembali ke riwayat retur</a></p>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul>
+  {% for category, message in messages %}
+  <li><strong>{{ category }}:</strong> {{ message }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+<ul>
+  <li>Jenis: {{ 'Retur Penjualan' if return.kind == 'sale_return' else 'Retur Pembelian' }}</li>
+  {% if return.sale_id %}<li>Penjualan asal: <a href="/sales/{{ return.sale_id }}">{{ return.sale_invoice }}</a></li>{% endif %}
+  {% if return.purchase_id %}<li>Pembelian asal: <a href="/purchases/{{ return.purchase_id }}">{{ return.purchase_invoice }}</a>{% if supplier_name %} ({{ supplier_name }}){% endif %}</li>{% endif %}
+  <li>Tanggal: {{ return.created_at }}</li>
+  <li>Diproses oleh: {{ return.created_by_name or '-' }}</li>
+  <li>Status: {{ return.status }}</li>
+  <li>Alasan: {{ return.reason }}</li>
+  {% if return.notes %}<li>Catatan: {{ return.notes }}</li>{% endif %}
+  {% if return.status == 'cancelled' %}
+  <li><strong>Retur ini DIBATALKAN.</strong></li>
+  <li>Alasan pembatalan: {{ return.cancel_reason }}</li>
+  <li>Dibatalkan oleh: {{ return.cancelled_by_name or '-' }} pada {{ return.cancelled_at }}</li>
+  {% endif %}
+</ul>
+<table>
+  <tr><th>Produk</th><th>SKU</th><th>Satuan</th><th>Kuantitas</th><th>Harga satuan</th><th>Subtotal</th></tr>
+  {% for item in items %}
+  <tr>
+    <td>{{ item.product_name }}</td>
+    <td>{{ item.sku or '-' }}</td>
+    <td>{{ item.unit or '-' }}</td>
+    <td>{{ item.qty }}</td>
+    <td>Rp {{ item.price }}</td>
+    <td>Rp {{ (item.price * item.qty)|int }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p>Total nilai retur: Rp {{ return.total }}</p>
+<p><strong>Catatan penyelesaian:</strong> nilai retur di atas adalah informasi transaksi. Pengembalian uang ke pelanggan (retur penjualan) atau pengurangan utang/penerimaan uang dari pemasok (retur pembelian) <strong>belum diproses otomatis</strong> — belum ada modul keuangan. Selesaikan secara manual dan catat di luar sistem.</p>
+{% if can_cancel and return.status == 'completed' %}
+<hr>
+<h2>Batalkan retur</h2>
+<p>Pembatalan tidak menghapus retur ini: status berubah menjadi <em>cancelled</em> dan stok dikembalikan lewat mutasi kompensasi. Pembatalan retur penjualan ditolak jika stok tidak mencukupi.</p>
+<form method="post" action="/returns/{{ return.id }}/cancel" onsubmit="return confirm('Batalkan retur {{ return.return_no }}?');">
+  {{ void_form.hidden_tag() }}
+  <p>{{ void_form.reason.label }}<br>{{ void_form.reason(size=60) }}{% for e in void_form.reason.errors %} <span>{{ e }}</span>{% endfor %}</p>
+  <p><button type="submit">Batalkan retur</button></p>
+</form>
+{% endif %}
+{% endblock %}

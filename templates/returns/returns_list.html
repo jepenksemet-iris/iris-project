@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Riwayat Retur — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Riwayat Retur</h1>
+<form method="get" action="/returns">
+  <label>Cari nomor: <input type="search" name="q" value="{{ q }}"></label>
+  <label>Jenis:
+    <select name="jenis">
+      <option value="">Semua</option>
+      <option value="sale_return" {% if kind == 'sale_return' %}selected{% endif %}>Retur Penjualan</option>
+      <option value="purchase_return" {% if kind == 'purchase_return' %}selected{% endif %}>Retur Pembelian</option>
+    </select>
+  </label>
+  <label>Status:
+    <select name="status">
+      <option value="">Semua</option>
+      {% for s in statuses %}
+      <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Dari: <input type="date" name="dari" value="{{ date_from }}"></label>
+  <label>Sampai: <input type="date" name="sampai" value="{{ date_to }}"></label>
+  <label>Urut:
+    <select name="urut">
+      <option value="newest" {% if order == 'newest' %}selected{% endif %}>Terbaru</option>
+      <option value="oldest" {% if order == 'oldest' %}selected{% endif %}>Terlama</option>
+    </select>
+  </label>
+  <button type="submit">Filter</button>
+</form>
+{% if returns %}
+<table>
+  <tr><th>Nomor</th><th>Jenis</th><th>Transaksi asal</th><th>Tanggal</th><th>Total nilai</th><th>Status</th><th></th></tr>
+  {% for r in returns %}
+  <tr>
+    <td>{{ r.return_no }}</td>
+    <td>{{ 'Penjualan' if r.kind == 'sale_return' else 'Pembelian' }}</td>
+    <td>{{ r.sale_invoice or r.purchase_invoice or '-' }}</td>
+    <td>{{ r.created_at }}</td>
+    <td>Rp {{ r.total }}</td>
+    <td>{{ r.status }}</td>
+    <td><a href="/returns/{{ r.id }}">Detail</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>Belum ada retur.</p>
+{% endif %}
+{% endblock %}

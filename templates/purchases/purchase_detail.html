@@ -38,6 +38,17 @@
   {% endfor %}
 </table>
 <p>Total: Rp {{ purchase.total }}</p>
+{% if returns %}
+<h2>Retur dari pembelian ini</h2>
+<ul>
+  {% for r in returns %}
+  <li><a href="/returns/{{ r.id }}">{{ r.return_no }}</a> — Rp {{ r.total }} ({{ r.status }})</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% if can_return and purchase.status == 'received' %}
+<p><a href="/purchases/{{ purchase.id }}/return">Buat retur pembelian</a></p>
+{% endif %}
 {% if can_cancel and purchase.status == 'received' %}
 <hr>
 <h2>Batalkan pembelian</h2>

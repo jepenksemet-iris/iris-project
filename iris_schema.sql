@@ -1,7 +1,7 @@
--- POS IRIS — skema database tenant, versi 5
+-- POS IRIS — skema database tenant, versi 6
 -- Berlaku per tenant: satu file iris.db di tenants/<slug>/iris.db
 -- Dibuat/idempotent oleh iris_db.init_tenant_db() (CREATE TABLE IF NOT EXISTS).
--- Versi skema dicatat di PRAGMA user_version = 5.
+-- Versi skema dicatat di PRAGMA user_version = 6.
 -- v2 (2026-11-25): stock_movements.kind ditambah 'opening_balance',
 -- 'adjustment_in', 'adjustment_out'; kolom effective_date (tanggal
 -- efektif mutasi, mis. saldo awal) ditambah.
@@ -16,8 +16,12 @@
 -- updated_at; purchases ditambah notes + kolom pembatalan
 -- (cancel_reason/cancelled_by/cancelled_at); purchase_items ditambah
 -- snapshot product_name/sku/unit; stock_movements.kind ditambah
--- 'purchase_void' (mutasi pembalik pembatalan pembelian). Database
--- lama dimigrasi oleh iris_db.migrate_tenant_db() (lihat iris_db.py).
+-- 'purchase_void' (mutasi pembalik pembatalan pembelian).
+-- v6 (2026-11-25): retur penjualan & pembelian — tabel baru returns +
+-- return_items; stock_movements.kind ditambah 'purchase_return' (mutasi
+-- keluar retur pembelian; retur penjualan memakai 'return' yang sudah
+-- ada). Database lama dimigrasi oleh iris_db.migrate_tenant_db()
+-- (lihat iris_db.py).
 -- Semua uang disimpan sebagai INTEGER (satuan rupiah terkecil) agar
 -- tidak ada kesalahan pembulatan float. Jumlah/stok memakai REAL
 -- hanya untuk barang yang dijual per berat/volume; stok dihitung
@@ -208,7 +212,7 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     kind TEXT NOT NULL
         CHECK (kind IN ('sale', 'purchase', 'adjustment', 'return', 'transfer',
                         'opening_balance', 'adjustment_in', 'adjustment_out',
-                        'sale_void', 'purchase_void')),
+                        'sale_void', 'purchase_void', 'purchase_return')),
     ref_type TEXT NOT NULL DEFAULT '',
     ref_id INTEGER,
     note TEXT NOT NULL DEFAULT '',
@@ -239,4 +243,47 @@ CREATE INDEX IF NOT EXISTS idx_sale_payments_sale ON sale_payments (sale_id);
 CREATE INDEX IF NOT EXISTS idx_purchases_created ON purchases (created_at);
 CREATE INDEX IF NOT EXISTS idx_purchases_supplier ON purchases (supplier_id);
 CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchase_items (purchase_id);
+
+-- Retur (P1 Tahap 7): satu tabel untuk retur penjualan & pembelian.
+-- kind 'sale_return' merujuk sales, 'purchase_return' merujuk purchases.
+-- Retur langsung diproses saat disimpan (status 'completed'); tidak ada
+-- draft. Nilai retur adalah informasi — pengembalian uang/utang TIDAK
+-- diproses otomatis (belum ada modul keuangan). Pembatalan retur memakai
+-- status 'cancelled' + jejak cancel_* dan mutasi kompensasi.
+CREATE TABLE IF NOT EXISTS returns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL CHECK (kind IN ('sale_return', 'purchase_return')),
+    sale_id INTEGER REFERENCES sales (id) ON DELETE SET NULL,
+    purchase_id INTEGER REFERENCES purchases (id) ON DELETE SET NULL,
+    outlet_id INTEGER NOT NULL REFERENCES outlets (id),
+    user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
+    return_no TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'completed'
+        CHECK (status IN ('completed', 'cancelled')),
+    total INTEGER NOT NULL DEFAULT 0 CHECK (total >= 0),
+    reason TEXT NOT NULL,
+    notes TEXT NOT NULL DEFAULT '',
+    idempotency_key TEXT UNIQUE,
+    idempotency_payload TEXT,
+    cancel_reason TEXT,
+    cancelled_by INTEGER REFERENCES users (id) ON DELETE SET NULL,
+    cancelled_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS return_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    return_id INTEGER NOT NULL REFERENCES returns (id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES products (id),
+    product_name TEXT NOT NULL DEFAULT '',
+    sku TEXT,
+    unit TEXT,
+    qty REAL NOT NULL CHECK (qty > 0),
+    price INTEGER NOT NULL CHECK (price >= 0) -- harga historis transaksi asal
+);
+
+CREATE INDEX IF NOT EXISTS idx_returns_created ON returns (created_at);
+CREATE INDEX IF NOT EXISTS idx_returns_sale ON returns (sale_id);
+CREATE INDEX IF NOT EXISTS idx_returns_purchase ON returns (purchase_id);
+CREATE INDEX IF NOT EXISTS idx_return_items_return ON return_items (return_id);
 CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements (product_id, created_at);

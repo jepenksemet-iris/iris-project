@@ -117,6 +117,16 @@ class PurchaseForm(FlaskForm):
     submit = SubmitField("Simpan pembelian")
 
 
+class ReturnForm(FlaskForm):
+    reason = StringField(
+        "Alasan retur",
+        validators=[DataRequired(), Length(max=500)],
+    )
+    notes = StringField("Catatan", validators=[Optional(), Length(max=500)])
+    idempotency_key = HiddenField()
+    submit = SubmitField("Simpan retur")
+
+
 class VoidForm(FlaskForm):
     reason = StringField(
         "Alasan pembatalan",

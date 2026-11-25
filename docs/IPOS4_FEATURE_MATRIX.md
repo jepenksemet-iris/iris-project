@@ -44,7 +44,7 @@
 | Daftar / Input Pembelian (penerimaan) | Sudah Ada dan Teruji | **P1 Tahap 6 (2026-11-25):** form pembelian multi-item + riwayat/detail (`/purchases`), penerimaan langsung menambah stok atomik lewat mutasi `purchase` + pembatalan dengan mutasi `purchase_void` (skema v5; `tests/test_purchases.py`) | P0 — PO draft (`ordered`) belum ada; retur pembelian terpisah |
 | History Harga Beli | Belum Ada | Dapat diturunkan dari `purchase_items` setelah pembelian ada | P1 — laporan setelah modul pembelian jalan |
 | Pembayaran Hutang, Status Lunas BG/Cek | Belum Ada | Tidak ada tabel hutang/pembayaran hutang | P0 (hutang) — hutang = sisa nilai pembelian kredit; BG/cek P1 |
-| Retur Pembelian | Belum Ada | Tanpa tabel/route | P0 — retur mengoreksi stok + hutang dalam satu transaksi |
+| Retur Pembelian | Sudah Ada dan Teruji | **P1 Tahap 7 (2026-11-25):** retur sebagian/penuh dari pembelian (`/purchases/<id>/return`), stok keluar `purchase_return`, batas kumulatif, pembatalan retur (`tests/test_returns.py`) | P0 — pengurangan utang/penerimaan uang belum otomatis (modul keuangan) |
 
 ## 3. Penjualan
 
@@ -56,7 +56,7 @@
 | Pembatalan Penjualan (Void) | Sudah Ada dan Teruji | **P1 Tahap 5 (2026-11-25):** `POST /sales/<id>/void` owner/admin, alasan wajib, atomik, stok dikembalikan lewat mutasi `sale_void` (skema v4), transaksi/item/pembayaran/mutasi asli tetap tersimpan; `tests/test_void.py`, 12 tes. Pembatalan bukan refund — pengembalian uang proses terpisah | P1 — retur sebagian terpisah |
 | History Harga Jual | Belum Ada | Dapat diturunkan dari `sale_items` setelah penjualan ada | P1 |
 | Pembayaran Piutang, Status Lunas BG/Cek | Belum Ada | Tidak ada tabel piutang/pembayaran | P0 (piutang) — piutang = sisa nilai penjualan kredit |
-| Retur Penjualan | Belum Ada | Tanpa tabel/route | P0 — retur membalikkan stok + piutang sesuai aturan |
+| Retur Penjualan | Sudah Ada dan Teruji | **P1 Tahap 7 (2026-11-25):** retur sebagian/penuh dari penjualan (`/sales/<id>/return`), stok masuk `return`, batas kumulatif, pembatalan retur, idempotensi (`tests/test_returns.py`) | P0 — pengembalian uang belum otomatis (modul keuangan) |
 | Poin Penjualan | Belum Ada | Tanpa tabel/route | P2 |
 
 ## 4. Konsinyasi
