@@ -4,16 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}POS IRIS{% endblock %}</title>
+  {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
+  {% if self.body_class() != "landing" %}
   <header>
     <strong>POS IRIS</strong> — <span>IRIS Platform</span>
   </header>
+  {% endif %}
   <main>
     {% block content %}{% endblock %}
   </main>
+  {% if self.body_class() != "landing" %}
   <footer>
     <small>Skeleton tahap 2 — fitur operasional belum diimplementasikan.</small>
   </footer>
+  {% endif %}
+  {% block extra_scripts %}{% endblock %}
 </body>
 </html>

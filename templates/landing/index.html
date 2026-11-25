@@ -1,15 +1,315 @@
 {% extends "base.html" %}
 {% block title %}POS IRIS — Kasir untuk Retail &amp; UMKM{% endblock %}
+{% block extra_head %}
+<meta name="description" content="POS IRIS adalah aplikasi kasir berbasis web untuk toko retail dan UMKM: transaksi kasir, produk, stok, pembelian, pelanggan, keuangan, dan laporan dalam satu sistem.">
+<meta property="og:title" content="POS IRIS — Kasir untuk Retail &amp; UMKM">
+<meta property="og:description" content="Kelola toko lebih mudah, semua dalam satu sistem: kasir, stok, dan laporan.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://posiris.biz.id/">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
+{% endblock %}
+{% block body_class %}landing{% endblock %}
 {% block content %}
-<h1>POS IRIS</h1>
-<p>Platform Point of Sale berbasis web untuk toko retail, usaha kecil, dan UMKM.</p>
-<p><a href="/register">Daftar</a> &middot; <a href="/health">Health check</a></p>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="/">POS <span>IRIS</span></a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-nav">Menu</button>
+    <nav class="main-nav" id="main-nav" aria-label="Navigasi utama">
+      <ul>
+        <li><a href="#fitur">Fitur</a></li>
+        <li><a href="#solusi">Solusi</a></li>
+        <li><a href="#cara-kerja">Cara Kerja</a></li>
+        <li><a href="#harga">Harga</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+    </nav>
+    <div class="header-actions">
+      <a class="btn btn-primary btn-sm" href="/register">Mulai Sekarang</a>
+    </div>
+  </div>
+</header>
 
-<h2>Paket</h2>
-<ul>
-  <li><strong>Starter</strong> — Rp10.000/bulan</li>
-  <li><strong>Growth</strong> — Rp189.000/bulan</li>
-  <li><strong>Scale</strong> — Rp499.000/bulan</li>
-</ul>
-<p><small>Harga adalah rancangan — perlu diverifikasi sebelum dipublikasikan. Lihat docs/PROJECT_OVERVIEW.md.</small></p>
+<section class="hero">
+  <div class="container hero-grid">
+    <div>
+      <h1>Kelola Toko Lebih Mudah, Semua dalam Satu Sistem.</h1>
+      <p class="lead">Dari transaksi kasir hingga stok dan laporan, pantau operasional toko dengan POS IRIS.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="/register">Mulai Sekarang</a>
+        <a class="btn btn-secondary" href="#fitur">Lihat Fitur</a>
+      </div>
+      <p class="hero-note">Butuh bantuan memilih paket? <a href="https://wa.me/6282237727330?text=Halo%20POS%20IRIS%2C%20saya%20mau%20konsultasi%20paket.">Konsultasi via WhatsApp</a></p>
+    </div>
+    <div class="mockup" role="img" aria-label="Ilustrasi tampilan kasir POS IRIS dengan data contoh">
+      <div class="mockup-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="mockup-body">
+        <h3>Kasir — Toko Contoh</h3>
+        <div class="mockup-row"><span>Gula Pasir 1 kg</span><span>Rp17.000</span></div>
+        <div class="mockup-row"><span>Minyak Goreng 2 L</span><span>Rp38.000</span></div>
+        <div class="mockup-row"><span>Kopi Sachet (10)</span><span>Rp12.000</span></div>
+        <div class="mockup-total"><span>Total</span><span>Rp67.000</span></div>
+      </div>
+      <p class="mockup-caption">Ilustrasi tampilan kasir — data contoh, bukan transaksi nyata.</p>
+    </div>
+  </div>
+</section>
+
+<section aria-label="Manfaat utama">
+  <div class="container value-grid">
+    <div class="value-card"><h3>Kasir lebih teratur</h3><p>Transaksi tercatat rapi di setiap penjualan.</p></div>
+    <div class="value-card"><h3>Stok lebih terpantau</h3><p>Jumlah stok per outlet terlihat dalam satu tempat.</p></div>
+    <div class="value-card"><h3>Laporan lebih mudah dibaca</h3><p>Rekap penjualan tersusun tanpa hitung manual.</p></div>
+    <div class="value-card"><h3>Data usaha tersusun</h3><p>Produk, pelanggan, dan keuangan dalam satu sistem.</p></div>
+  </div>
+</section>
+
+<section class="problems" id="masalah">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Masalah yang diselesaikan</span>
+      <h2>Apakah ini terjadi di toko Anda?</h2>
+    </div>
+    <div class="problem-list">
+      <div class="problem-item"><h3>Pencatatan transaksi manual</h3><p>Nota ditulis tangan, mudah hilang dan sulit dicari kembali.</p></div>
+      <div class="problem-item"><h3>Sulit mengetahui stok aktual</h3><p>Barang habis baru ketahuan saat pelanggan bertanya.</p></div>
+      <div class="problem-item"><h3>Data penjualan tersebar</h3><p>Catatan ada di buku, ponsel, dan kepala — tidak menyatu.</p></div>
+      <div class="problem-item"><h3>Rekap laporan memakan waktu</h3><p>Hitung ulang di akhir hari atau akhir bulan menyita waktu.</p></div>
+      <div class="problem-item"><h3>Sulit memantau beberapa outlet</h3><p>Pemilik harus datang ke tiap toko untuk tahu kondisinya.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="fitur">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Fitur utama</span>
+      <h2>Satu sistem untuk operasional toko</h2>
+      <p>Modul-modul POS IRIS berikut adalah ruang lingkup produk yang sedang dibangun.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card"><div class="icon" aria-hidden="true">🧾</div><h3>Kasir dan transaksi</h3><p>Catat penjualan di kasir dengan cepat dan rapi.</p></div>
+      <div class="feature-card"><div class="icon" aria-hidden="true">📦</div><h3>Produk dan kategori</h3><p>Susun produk dan kategori agar mudah dicari saat transaksi.</p></div>
+      <div class="feature-card"><div class="icon" aria-hidden="true">📊</div><h3>Persediaan dan mutasi stok</h3><p>Pantau stok per outlet dan riwayat perubahan stok.</p></div>
+      <div class="feature-card"><div class="icon" aria-hidden="true">🚚</div><h3>Pembelian dan pemasok</h3><p>Catat pembelian barang dan data pemasok dalam satu tempat.</p></div>
+      <div class="feature-card"><div class="icon" aria-hidden="true">👥</div><h3>Pelanggan</h3><p>Simpan data pelanggan dan riwayat belanja mereka.</p></div>
+      <div class="feature-card"><div class="icon" aria-hidden="true">📈</div><h3>Laporan penjualan</h3><p>Lihat penjualan per periode tanpa rekap manual.</p></div>
+      <div class="feature-card"><div class="icon" aria-hidden="true">💰</div><h3>Keuangan</h3><p>Pantau pemasukan dan pengeluaran usaha.</p></div>
+      <div class="feature-card"><div class="icon" aria-hidden="true">🏪</div><h3>Multi-outlet</h3><p>Kelola beberapa outlet dari satu akun, sesuai batas paket.</p></div>
+      <div class="feature-card"><div class="icon" aria-hidden="true">🔑</div><h3>Hak akses pengguna</h3><p>Atur peran owner, admin, dan kasir untuk tiap pengguna.</p></div>
+    </div>
+    <p class="feature-note">Status saat ini: skema data dan autentikasi tenant sudah tersedia; modul kasir, produk, stok, pembelian, dan laporan sedang dibangun bertahap. Lihat README repositori untuk status terbaru.</p>
+  </div>
+</section>
+
+<section id="showcase" aria-label="Tampilan produk">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Tampilan produk</span>
+      <h2>Lihat cara kerja POS IRIS</h2>
+    </div>
+    <div class="showcase-row">
+      <div class="showcase-text">
+        <h3>Tampilan kasir</h3>
+        <p>Pilih produk, masukkan jumlah, dan selesaikan transaksi. Total dihitung otomatis dari harga produk.</p>
+        <ul><li>Pencarian produk cepat</li><li>Total dan kembalian jelas</li><li>Transaksi tersimpan per outlet</li></ul>
+      </div>
+      <div class="showcase-visual">
+        <table>
+          <thead><tr><th>Produk</th><th>Jumlah</th><th>Harga</th></tr></thead>
+          <tbody>
+            <tr><td>Gula Pasir 1 kg</td><td>2</td><td>Rp34.000</td></tr>
+            <tr><td>Minyak Goreng 2 L</td><td>1</td><td>Rp38.000</td></tr>
+            <tr><td>Kopi Sachet</td><td>10</td><td>Rp12.000</td></tr>
+          </tbody>
+        </table>
+        <p><small>Data contoh untuk ilustrasi.</small></p>
+      </div>
+    </div>
+    <div class="showcase-row">
+      <div class="showcase-text">
+        <h3>Tampilan stok</h3>
+        <p>Stok dihitung per produk dan per outlet, sehingga Anda tahu barang mana yang menipis.</p>
+        <ul><li>Stok per outlet terpisah</li><li>Riwayat mutasi stok tercatat</li><li>Penyesuaian stok terdokumentasi</li></ul>
+      </div>
+      <div class="showcase-visual">
+        <div class="bar-row"><span style="width:7rem">Gula Pasir</span><span class="bar" style="width:60%"></span><span>120</span></div>
+        <div class="bar-row"><span style="width:7rem">Minyak Goreng</span><span class="bar" style="width:30%"></span><span>45</span></div>
+        <div class="bar-row"><span style="width:7rem">Kopi Sachet</span><span class="bar" style="width:80%"></span><span>200</span></div>
+        <p><small>Data contoh untuk ilustrasi.</small></p>
+      </div>
+    </div>
+    <div class="showcase-row">
+      <div class="showcase-text">
+        <h3>Tampilan laporan</h3>
+        <p>Penjualan diringkas per periode, sehingga pemilik bisa menilai kinerja toko tanpa menghitung manual.</p>
+        <ul><li>Penjualan per hari dan per periode</li><li>Produk terlaris terlihat jelas</li><li>Perbandingan antar outlet</li></ul>
+      </div>
+      <div class="showcase-visual">
+        <table>
+          <thead><tr><th>Periode</th><th>Transaksi</th><th>Total</th></tr></thead>
+          <tbody>
+            <tr><td>Hari ini</td><td>42</td><td>Rp1.250.000</td></tr>
+            <tr><td>Minggu ini</td><td>268</td><td>Rp8.400.000</td></tr>
+            <tr><td>Bulan ini</td><td>1.104</td><td>Rp34.750.000</td></tr>
+          </tbody>
+        </table>
+        <p><small>Data contoh untuk ilustrasi.</small></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="steps" id="cara-kerja">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Cara kerja</span>
+      <h2>Mulai dalam empat langkah</h2>
+    </div>
+    <div class="step-grid">
+      <div class="step"><span class="step-num">1</span><h3>Daftarkan usaha</h3><p>Hubungi kami lewat WhatsApp untuk mendaftarkan usaha Anda.</p></div>
+      <div class="step"><span class="step-num">2</span><h3>Siapkan produk dan outlet</h3><p>Masukkan produk, kategori, dan outlet toko Anda.</p></div>
+      <div class="step"><span class="step-num">3</span><h3>Mulai catat transaksi</h3><p>Gunakan kasir untuk mencatat setiap penjualan.</p></div>
+      <div class="step"><span class="step-num">4</span><h3>Pantau stok dan laporan</h3><p>Periksa stok dan laporan penjualan secara berkala.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="solusi">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Solusi</span>
+      <h2>Untuk berbagai jenis usaha</h2>
+    </div>
+    <div class="usecase-grid">
+      <div class="usecase-card"><h3>Toko kelontong / sembako</h3><p>Barang harian dengan banyak variasi produk.</p></div>
+      <div class="usecase-card"><h3>Toko bangunan</h3><p>Produk beragam dan stok per gudang.</p></div>
+      <div class="usecase-card"><h3>Toko pakaian</h3><p>Varian ukuran dan warna per produk.</p></div>
+      <div class="usecase-card"><h3>Toko elektronik</h3><p>Produk bernilai tinggi dan perlu pencatatan rapi.</p></div>
+      <div class="usecase-card"><h3>UMKM lainnya</h3><p>Usaha kecil yang butuh pencatatan sederhana.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="pricing" id="harga">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Harga</span>
+      <h2>Pilih paket yang tepat</h2>
+      <p>Harga paket, bukan harga per outlet, selama jumlah outlet masih dalam batas paket.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="price-card">
+        <h3>Starter</h3>
+        <p class="price">Rp10.000<span>/bulan</span></p>
+        <p>Untuk toko kecil yang baru mulai mencatat transaksi secara digital.</p>
+        <a class="btn btn-secondary" href="/register">Mulai Sekarang</a>
+      </div>
+      <div class="price-card featured">
+        <span class="badge">Paling banyak dipilih</span>
+        <h3>Growth</h3>
+        <p class="price">Rp189.000<span>/bulan</span></p>
+        <p>Untuk toko yang berkembang dan butuh pengelolaan lebih lengkap.</p>
+        <a class="btn btn-primary" href="/register">Mulai Sekarang</a>
+      </div>
+      <div class="price-card">
+        <h3>Scale</h3>
+        <p class="price">Rp499.000<span>/bulan</span></p>
+        <p>Untuk usaha dengan beberapa outlet dan kebutuhan lebih besar.</p>
+        <a class="btn btn-secondary" href="/register">Mulai Sekarang</a>
+      </div>
+    </div>
+    <p class="pricing-note">Harga adalah rancangan dan perlu diverifikasi sebelum rilis produksi. Kuota outlet, pengguna, dan produk per paket akan diumumkan — hubungi WhatsApp untuk detail paket saat ini.</p>
+  </div>
+</section>
+
+<section id="keamanan">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Keamanan dan keandalan</span>
+      <h2>Data usaha Anda dijaga</h2>
+    </div>
+    <ul class="security-list">
+      <li><strong>Pemisahan data tenant</strong> — setiap usaha punya database sendiri, dan identitas tenant diperiksa di setiap permintaan.</li>
+      <li><strong>Hak akses pengguna</strong> — peran owner, admin, dan kasir membatasi apa yang bisa dilakukan tiap pengguna.</li>
+      <li><strong>Validasi dan perlindungan aplikasi</strong> — formulir memakai CSRF dan password disimpan sebagai hash, bukan teks mentah.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="faq" id="faq">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">FAQ</span>
+      <h2>Pertanyaan yang sering diajukan</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false" aria-controls="faq-1">Apa itu POS IRIS?</button>
+        <div class="faq-answer" id="faq-1" hidden><p>POS IRIS adalah aplikasi kasir berbasis web untuk membantu pemilik usaha mengelola transaksi kasir, produk, persediaan, pembelian, pelanggan, keuangan, outlet, dan laporan dalam satu sistem.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false" aria-controls="faq-2">Siapa yang dapat menggunakan POS IRIS?</button>
+        <div class="faq-answer" id="faq-2" hidden><p>Semua toko retail dan UMKM — mulai dari toko kelontong, toko bangunan, toko pakaian, toko elektronik, hingga usaha kecil lainnya.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false" aria-controls="faq-3">Apakah POS IRIS cocok untuk beberapa outlet?</button>
+        <div class="faq-answer" id="faq-3" hidden><p>Ya, POS IRIS dirancang multi-outlet. Batas jumlah outlet mengikuti paket yang Anda pilih — detail kuota per paket akan diumumkan.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false" aria-controls="faq-4">Bagaimana cara mendaftar?</button>
+        <div class="faq-answer" id="faq-4" hidden><p>Saat ini pendaftaran dilakukan dengan menghubungi kami lewat WhatsApp di 0822-3772-7330. Pendaftaran mandiri lewat situs sedang disiapkan.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false" aria-controls="faq-5">Apa perbedaan paket?</button>
+        <div class="faq-answer" id="faq-5" hidden><p>Paket dibedakan dari batas layanan seperti jumlah outlet, pengguna, dan produk. Harga: Starter Rp10.000/bulan, Growth Rp189.000/bulan, Scale Rp499.000/bulan. Kuota detail per paket akan diumumkan.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false" aria-controls="faq-6">Apakah tersedia bantuan penggunaan?</button>
+        <div class="faq-answer" id="faq-6" hidden><p>Ya, hubungi kami lewat WhatsApp di 0822-3772-7330 untuk bantuan penggunaan dan konsultasi paket.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-question" type="button" aria-expanded="false" aria-controls="faq-7">Bagaimana keamanan data usaha?</button>
+        <div class="faq-answer" id="faq-7" hidden><p>Data tiap usaha dipisahkan per tenant, akses pengguna dibatasi menurut peran, dan password disimpan sebagai hash. Kami tidak mengklaim sertifikasi keamanan yang belum dibuktikan.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final-cta">
+  <div class="container">
+    <h2>Mulai Kelola Toko dengan Lebih Teratur.</h2>
+    <p class="lead">Daftarkan usaha Anda sekarang, atau konsultasikan dulu kebutuhan toko Anda.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="/register">Mulai Sekarang</a>
+      <a class="btn btn-secondary" href="https://wa.me/6282237727330?text=Halo%20POS%20IRIS%2C%20saya%20mau%20konsultasi.">Konsultasi via WhatsApp</a>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="/">POS <span>IRIS</span></a>
+        <p>Aplikasi kasir berbasis web untuk toko retail dan UMKM.</p>
+      </div>
+      <div>
+        <h3>Produk</h3>
+        <ul><li><a href="#fitur">Fitur</a></li><li><a href="#harga">Harga</a></li></ul>
+      </div>
+      <div>
+        <h3>Bantuan</h3>
+        <ul><li><a href="#faq">FAQ</a></li><li><a href="https://wa.me/6282237727330">Kontak WhatsApp</a></li></ul>
+      </div>
+      <div>
+        <h3>Kontak</h3>
+        <ul><li><a href="https://wa.me/6282237727330">WhatsApp 0822-3772-7330</a></li><li><a href="https://posiris.biz.id/">posiris.biz.id</a></li></ul>
+      </div>
+    </div>
+    <div class="footer-bottom">© 2026 POS IRIS. Harga adalah rancangan — perlu diverifikasi sebelum rilis produksi.</div>
+  </div>
+</footer>
+{% endblock %}
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/landing.js') }}"></script>
 {% endblock %}

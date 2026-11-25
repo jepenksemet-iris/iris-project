@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-25 — Tahap 4: landing page POS IRIS
+
+- `templates/landing/index.html` — ditulis ulang penuh: header/nav (Fitur, Solusi, Cara Kerja, Harga, FAQ), hero + mockup kasir (HTML/CSS, data contoh), value strip, masalah, grid 9 fitur, showcase kasir/stok/laporan, cara kerja 4 langkah, 5 kartu solusi, 3 kartu harga, keamanan, FAQ accordion 7 pertanyaan, final CTA, footer. SEO: meta description + Open Graph, canonical posiris.biz.id.
+- `static/css/landing.css` — design tokens (CSS variables), responsif 1024/768/480px, `prefers-reduced-motion`. `static/js/landing.js` — menu mobile + FAQ accordion (aria-expanded).
+- `templates/landing/register.html` — tanpa form palsu: pendaftaran via WhatsApp resmi 0822-3772-7330 (wa.me/6282237727330), pendaftaran mandiri sedang disiapkan.
+- `templates/base.html` — blok `extra_head`/`extra_scripts` dan `body_class`; header/footer skeleton disembunyikan di halaman landing (yang punya header/footer sendiri). Halaman tenant/superadmin tidak berubah tampilannya.
+- Kejujuran konten: tanpa "Coba Gratis" (trial belum aktif), tanpa testimoni/statistik palsu, tanpa kuota paket karangan, tanpa halaman legal kosong. Fitur ditandai sebagai ruang lingkup yang sedang dibangun bertahap.
+- Tes baru `tests/test_landing.py`: total **10 passed** lokal (Python 3.12.3); landing + tenant dicek langsung lewat HTTP (`/` 200, `/register` 200, CSS/JS 200, `/login` tenant 200).
+- Yang BELUM ada: pendaftaran & provisioning tenant mandiri, autentikasi Super Admin, rate limiting login, dan modul operasional.
+
 ## 2026-11-25 — Tahap 3: skema database v1 + autentikasi tenant
 
 - `iris_schema.sql` — skema tenant v1 (14 tabel): users, outlets, categories, units, products, stock (per outlet), customers, suppliers, sales, sale_items, purchases, purchase_items, stock_movements, cash_transactions. Uang disimpan sebagai INTEGER rupiah; versi skema dicatat di `PRAGMA user_version = 1`.

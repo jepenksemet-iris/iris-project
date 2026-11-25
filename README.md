@@ -2,7 +2,7 @@
 
 Platform Point of Sale (POS) berbasis web untuk toko retail, usaha kecil, dan UMKM. Arah pengembangan IRIS adalah menjadi platform operasional bisnis modular berbasis SaaS, bukan hanya aplikasi kasir.
 
-> **Status:** Tahap 3 — skema database v1 + autentikasi tenant (2026-11-25). Database tenant SQLite kini punya skema v1 (14 tabel) dan aplikasi tenant dilindungi login dengan role owner/admin/cashier. Modul operasional (kasir, produk, stok, pembelian, laporan, dst) **belum** diimplementasikan — yang ada baru daftar produk (baca saja). Daftar fitur di dokumen adalah peta ruang lingkup produk — **bukan** pernyataan bahwa semua fitur sudah selesai atau tersedia.
+> **Status:** Tahap 4 — landing page POS IRIS (2026-11-25). Landing kini punya header/nav, hero + mockup kasir, value strip, masalah, fitur, showcase, cara kerja, solusi, harga, keamanan, FAQ, dan final CTA, dengan CSS/JS sendiri dan tes landing. Pendaftaran mandiri **belum** ada — `/register` mengarahkan ke WhatsApp resmi 0822-3772-7330. Trial 14 hari **belum aktif**. Kuota/fitur per paket menyusul. Database tenant SQLite punya skema v1 (14 tabel) dan aplikasi tenant dilindungi login dengan role owner/admin/cashier. Modul operasional (kasir, produk, stok, pembelian, laporan, dst) **belum** diimplementasikan — yang ada baru daftar produk (baca saja). Daftar fitur di dokumen adalah peta ruang lingkup produk — **bukan** pernyataan bahwa semua fitur sudah selesai atau tersedia.
 
 - **Nama proyek:** IRIS Platform
 - **Nama aplikasi:** POS IRIS
@@ -22,7 +22,7 @@ Komponen aplikasi (skeleton tahap 2 — sudah ada, masih placeholder):
 
 | Aplikasi | File | Port | Fungsi |
 |---|---|---|---|
-| Landing | `landing_app.py` | 5000 | Situs publik, informasi produk, pendaftaran (placeholder) |
+| Landing | `landing_app.py` | 5000 | Situs publik, informasi produk, pendaftaran via WhatsApp (provisioning mandiri belum ada) |
 | Tenant | `tenant_app.py` | 5001 | Aplikasi operasional milik tenant — **login wajib**, dashboard + daftar produk |
 | Super Admin | `superadmin_app.py` | 5002 | Pengelolaan platform dan tenant (placeholder, **belum ada auth**) |
 
@@ -52,7 +52,7 @@ Tes:
 
 ```bash
 python -m pytest tests/ -q
-# Terakhir diuji lokal: 7 passed (2026-11-25)
+# Terakhir diuji lokal: 10 passed (2026-11-25)
 ```
 
 > **Peringatan keamanan:** Super Admin masih **belum punya autentikasi** — jangan diekspos ke internet. Aplikasi tenant sudah login + role, tapi belum ada rate limiting login, penguncian akun, atau reset password. Secret hanya dari environment (`.env`, tidak di-commit); password pengguna disimpan sebagai hash (Werkzeug/scrypt), bukan teks mentah.

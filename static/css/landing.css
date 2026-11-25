@@ -1,0 +1,196 @@
+/* POS IRIS — Landing page styles.
+   Design tokens terpusat. Hanya dipakai halaman landing; halaman
+   tenant/superadmin tidak memuat file ini. */
+:root {
+  --iris-brand: #4f46e5;
+  --iris-brand-hover: #4338ca;
+  --iris-brand-soft: #eef2ff;
+  --iris-text: #0f172a;
+  --iris-text-muted: #475569;
+  --iris-bg: #ffffff;
+  --iris-surface: #f8fafc;
+  --iris-border: #e2e8f0;
+  --iris-cta: #4f46e5;
+  --iris-cta-hover: #4338ca;
+  --iris-cta-text: #ffffff;
+  --iris-success: #15803d;
+  --iris-radius-card: 12px;
+  --iris-radius-btn: 8px;
+  --iris-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.06);
+  --iris-container: 1120px;
+  --iris-space-section: 5rem;
+  --iris-font: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --iris-font-size-h1: 2.75rem;
+  --iris-font-size-h2: 1.875rem;
+  --iris-font-size-body: 1.0625rem;
+}
+
+* { box-sizing: border-box; }
+
+.landing { font-family: var(--iris-font); color: var(--iris-text); background: var(--iris-bg); line-height: 1.6; }
+.landing a { color: var(--iris-brand); }
+.landing a:focus-visible, .landing button:focus-visible { outline: 3px solid var(--iris-brand); outline-offset: 2px; }
+.landing .container { max-width: var(--iris-container); margin: 0 auto; padding: 0 1.25rem; }
+.landing section { padding: var(--iris-space-section) 0; }
+.landing h1 { font-size: var(--iris-font-size-h1); line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 1rem; }
+.landing h2 { font-size: var(--iris-font-size-h2); line-height: 1.25; letter-spacing: -0.015em; margin: 0 0 0.75rem; }
+.landing h3 { font-size: 1.125rem; margin: 0 0 0.375rem; }
+.landing p.lead { font-size: 1.1875rem; color: var(--iris-text-muted); margin: 0 0 1.5rem; }
+.landing .section-head { max-width: 640px; margin: 0 auto 2.5rem; text-align: center; }
+.landing .section-head p { color: var(--iris-text-muted); margin: 0; }
+.landing .eyebrow { display: block; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--iris-brand); margin-bottom: 0.5rem; }
+
+/* Header */
+.landing .site-header { position: sticky; top: 0; z-index: 50; background: var(--iris-bg); border-bottom: 1px solid var(--iris-border); }
+.landing .header-inner { display: flex; align-items: center; gap: 1.5rem; height: 64px; }
+.landing .brand { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.01em; color: var(--iris-text); text-decoration: none; }
+.landing .brand span { color: var(--iris-brand); }
+.landing .main-nav { margin-left: auto; }
+.landing .main-nav ul { display: flex; gap: 1.5rem; list-style: none; margin: 0; padding: 0; }
+.landing .main-nav a { color: var(--iris-text); text-decoration: none; font-weight: 500; }
+.landing .main-nav a:hover { color: var(--iris-brand); }
+.landing .header-actions { display: flex; align-items: center; gap: 0.75rem; }
+.landing .menu-toggle { display: none; background: none; border: 1px solid var(--iris-border); border-radius: var(--iris-radius-btn); padding: 0.5rem 0.75rem; font: inherit; cursor: pointer; }
+
+/* Buttons */
+.landing .btn { display: inline-block; padding: 0.75rem 1.5rem; border-radius: var(--iris-radius-btn); font-weight: 600; text-decoration: none; border: 1px solid transparent; cursor: pointer; font-size: 1rem; }
+.landing .btn-primary { background: var(--iris-cta); color: var(--iris-cta-text); }
+.landing .btn-primary:hover { background: var(--iris-cta-hover); color: var(--iris-cta-text); }
+.landing .btn-secondary { background: var(--iris-bg); color: var(--iris-text); border-color: var(--iris-border); }
+.landing .btn-secondary:hover { border-color: var(--iris-brand); color: var(--iris-brand); }
+.landing .btn-sm { padding: 0.5rem 1rem; font-size: 0.9375rem; }
+
+/* Hero */
+.landing .hero { padding: 4.5rem 0 4rem; background: var(--iris-surface); }
+.landing .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; }
+.landing .hero-cta { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.landing .hero-note { font-size: 0.9375rem; color: var(--iris-text-muted); margin: 0; }
+.landing .hero-note a { font-weight: 600; }
+
+/* Mockup kasir (HTML/CSS, data contoh) */
+.landing .mockup { background: var(--iris-bg); border: 1px solid var(--iris-border); border-radius: var(--iris-radius-card); box-shadow: var(--iris-shadow); overflow: hidden; }
+.landing .mockup-bar { display: flex; gap: 0.375rem; padding: 0.75rem 1rem; background: var(--iris-surface); border-bottom: 1px solid var(--iris-border); }
+.landing .mockup-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--iris-border); display: block; }
+.landing .mockup-body { padding: 1rem; }
+.landing .mockup-body h3 { font-size: 0.9375rem; margin-bottom: 0.75rem; }
+.landing .mockup-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--iris-border); font-size: 0.9375rem; }
+.landing .mockup-row:last-of-type { border-bottom: 0; }
+.landing .mockup-total { display: flex; justify-content: space-between; font-weight: 700; padding-top: 0.75rem; }
+.landing .mockup-caption { font-size: 0.8125rem; color: var(--iris-text-muted); margin: 0.5rem 1rem 1rem; }
+
+/* Value strip */
+.landing .value-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.landing .value-card { border: 1px solid var(--iris-border); border-radius: var(--iris-radius-card); padding: 1.25rem; background: var(--iris-bg); }
+.landing .value-card h3 { font-size: 1rem; }
+
+/* Masalah */
+.landing .problems { background: var(--iris-surface); }
+.landing .problem-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; max-width: 860px; margin: 0 auto; }
+.landing .problem-item { background: var(--iris-bg); border: 1px solid var(--iris-border); border-radius: var(--iris-radius-card); padding: 1.25rem; }
+.landing .problem-item h3 { font-size: 1rem; }
+.landing .problem-item p { color: var(--iris-text-muted); margin: 0; font-size: 0.9375rem; }
+
+/* Fitur */
+.landing .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.landing .feature-card { border: 1px solid var(--iris-border); border-radius: var(--iris-radius-card); padding: 1.5rem; box-shadow: var(--iris-shadow); background: var(--iris-bg); }
+.landing .feature-card .icon { font-size: 1.5rem; line-height: 1; margin-bottom: 0.75rem; }
+.landing .feature-card p { color: var(--iris-text-muted); margin: 0; font-size: 0.9375rem; }
+.landing .feature-note { text-align: center; color: var(--iris-text-muted); font-size: 0.9375rem; margin: 2rem auto 0; max-width: 640px; }
+
+/* Showcase bergantian */
+.landing .showcase-row { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; padding: 2rem 0; }
+.landing .showcase-row + .showcase-row { border-top: 1px solid var(--iris-border); }
+.landing .showcase-row:nth-child(even) .showcase-text { order: 2; }
+.landing .showcase-text p { color: var(--iris-text-muted); }
+.landing .showcase-text ul { color: var(--iris-text-muted); padding-left: 1.25rem; }
+.landing .showcase-visual { background: var(--iris-surface); border: 1px solid var(--iris-border); border-radius: var(--iris-radius-card); padding: 1.25rem; }
+.landing .showcase-visual table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+.landing .showcase-visual th, .landing .showcase-visual td { text-align: left; padding: 0.5rem 0; border-bottom: 1px solid var(--iris-border); }
+.landing .showcase-visual tr:last-child th, .landing .showcase-visual tr:last-child td { border-bottom: 0; }
+.landing .showcase-visual .bar-row { display: flex; align-items: center; gap: 0.75rem; margin: 0.625rem 0; font-size: 0.9375rem; }
+.landing .showcase-visual .bar { height: 10px; background: var(--iris-brand); border-radius: 4px; }
+
+/* Cara kerja */
+.landing .steps { background: var(--iris-surface); }
+.landing .step-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; counter-reset: step; }
+.landing .step { background: var(--iris-bg); border: 1px solid var(--iris-border); border-radius: var(--iris-radius-card); padding: 1.5rem; }
+.landing .step-num { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: 50%; background: var(--iris-brand-soft); color: var(--iris-brand); font-weight: 700; margin-bottom: 0.75rem; }
+.landing .step p { color: var(--iris-text-muted); margin: 0; font-size: 0.9375rem; }
+
+/* Solusi / use case */
+.landing .usecase-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
+.landing .usecase-card { border: 1px solid var(--iris-border); border-radius: var(--iris-radius-card); padding: 1.25rem; text-align: center; }
+.landing .usecase-card h3 { font-size: 1rem; }
+.landing .usecase-card p { color: var(--iris-text-muted); margin: 0; font-size: 0.875rem; }
+
+/* Harga */
+.landing .pricing { background: var(--iris-surface); }
+.landing .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; align-items: stretch; }
+.landing .price-card { background: var(--iris-bg); border: 1px solid var(--iris-border); border-radius: var(--iris-radius-card); padding: 1.75rem; display: flex; flex-direction: column; }
+.landing .price-card.featured { border: 2px solid var(--iris-brand); }
+.landing .price-card .badge { display: inline-block; font-size: 0.8125rem; font-weight: 700; color: var(--iris-brand); background: var(--iris-brand-soft); border-radius: 999px; padding: 0.125rem 0.625rem; margin-bottom: 0.75rem; }
+.landing .price { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; }
+.landing .price span { font-size: 1rem; font-weight: 500; color: var(--iris-text-muted); }
+.landing .price-card p { color: var(--iris-text-muted); font-size: 0.9375rem; }
+.landing .price-card .btn { margin-top: auto; text-align: center; }
+.landing .pricing-note { text-align: center; color: var(--iris-text-muted); font-size: 0.9375rem; margin: 1.5rem auto 0; max-width: 640px; }
+
+/* Keamanan */
+.landing .security-list { max-width: 640px; margin: 0 auto; list-style: none; padding: 0; }
+.landing .security-list li { padding: 0.75rem 0 0.75rem 2rem; border-bottom: 1px solid var(--iris-border); position: relative; }
+.landing .security-list li::before { content: "✓"; position: absolute; left: 0.25rem; color: var(--iris-success); font-weight: 700; }
+.landing .security-list li:last-child { border-bottom: 0; }
+
+/* FAQ */
+.landing .faq { background: var(--iris-surface); }
+.landing .faq-list { max-width: 760px; margin: 0 auto; }
+.landing .faq-item { background: var(--iris-bg); border: 1px solid var(--iris-border); border-radius: var(--iris-radius-card); margin-bottom: 0.75rem; overflow: hidden; }
+.landing .faq-question { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 1rem; background: none; border: 0; padding: 1rem 1.25rem; font: inherit; font-weight: 600; text-align: left; cursor: pointer; color: var(--iris-text); }
+.landing .faq-answer { padding: 0 1.25rem 1.25rem; color: var(--iris-text-muted); }
+.landing .faq-answer[hidden] { display: none; }
+
+/* Final CTA */
+.landing .final-cta { text-align: center; }
+.landing .final-cta .hero-cta { justify-content: center; }
+
+/* Footer */
+.landing .site-footer { border-top: 1px solid var(--iris-border); padding: 3rem 0 2rem; }
+.landing .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 2rem; }
+.landing .site-footer h3 { font-size: 0.9375rem; }
+.landing .site-footer ul { list-style: none; margin: 0; padding: 0; }
+.landing .site-footer li { margin-bottom: 0.5rem; }
+.landing .site-footer a { color: var(--iris-text-muted); text-decoration: none; }
+.landing .site-footer a:hover { color: var(--iris-brand); }
+.landing .site-footer p { color: var(--iris-text-muted); font-size: 0.9375rem; }
+.landing .footer-bottom { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--iris-border); color: var(--iris-text-muted); font-size: 0.875rem; }
+
+/* Register page */
+.landing .register-box { max-width: 640px; margin: 0 auto; text-align: center; }
+
+/* Responsif */
+@media (max-width: 1024px) {
+  .landing .usecase-grid { grid-template-columns: repeat(3, 1fr); }
+  .landing .step-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  :root { --iris-font-size-h1: 2rem; --iris-font-size-h2: 1.5rem; --iris-space-section: 3.5rem; }
+  .landing .hero-grid, .landing .showcase-row { grid-template-columns: 1fr; gap: 1.5rem; }
+  .landing .showcase-row:nth-child(even) .showcase-text { order: 0; }
+  .landing .value-grid, .landing .feature-grid, .landing .pricing-grid { grid-template-columns: 1fr; }
+  .landing .problem-list { grid-template-columns: 1fr; }
+  .landing .usecase-grid { grid-template-columns: repeat(2, 1fr); }
+  .landing .footer-grid { grid-template-columns: 1fr 1fr; }
+  .landing .menu-toggle { display: inline-block; margin-left: auto; }
+  .landing .main-nav { display: none; position: absolute; top: 64px; left: 0; right: 0; background: var(--iris-bg); border-bottom: 1px solid var(--iris-border); padding: 1rem 1.25rem; margin: 0; }
+  .landing .main-nav.open { display: block; }
+  .landing .main-nav ul { flex-direction: column; gap: 0.75rem; }
+  .landing .header-actions .btn { display: none; }
+  .landing .header-actions .btn-sm { display: inline-block; }
+}
+@media (max-width: 480px) {
+  .landing .usecase-grid, .landing .step-grid, .landing .footer-grid { grid-template-columns: 1fr; }
+  .landing .hero { padding-top: 3rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
