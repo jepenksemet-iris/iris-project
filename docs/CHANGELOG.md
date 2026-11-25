@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-25 — Tahap 3: skema database v1 + autentikasi tenant
+
+- `iris_schema.sql` — skema tenant v1 (14 tabel): users, outlets, categories, units, products, stock (per outlet), customers, suppliers, sales, sale_items, purchases, purchase_items, stock_movements, cash_transactions. Uang disimpan sebagai INTEGER rupiah; versi skema dicatat di `PRAGMA user_version = 1`.
+- `iris_db.py` — `init_tenant_db()` (idempotent), `create_user()`, `verify_user()`. Password di-hash dengan Werkzeug/scrypt, tidak pernah disimpan mentah. Slug tenant tetap divalidasi ketat.
+- `iris_auth.py` + `forms.py` — autentikasi tenant dengan Flask-Login. User id di session dipasangkan dengan slug tenant di session, mencegah session lintas tenant. Role owner/admin/cashier via decorator `require_role()` dan route percobaan `/admin-only`.
+- `tenant_app.py` — dashboard dan `/products` kini wajib login; ada `/login` (form Flask-WTF + CSRF), `/logout`, dan perintah CLI `flask --app tenant_app create-owner`.
+- Tes baru `tests/test_schema_auth.py` + penyesuaian `tests/test_apps.py`: total **7 passed** lokal (Python 3.12.3).
+- Yang BELUM ada: autentikasi Super Admin, rate limiting login / penguncian akun / reset password, pendaftaran & provisioning tenant, dan modul operasional (kasir, tambah produk, mutasi stok, pembelian, laporan).
+- `README.md`, `docs/DATABASE.md`, dan `docs/SECURITY.md` diperbarui.
+
 ## 2026-11-25 — Tahap 2: skeleton Flask
 
 - Menambahkan kerangka aplikasi Flask yang bisa dijalankan:

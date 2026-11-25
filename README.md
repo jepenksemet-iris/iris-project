@@ -2,7 +2,7 @@
 
 Platform Point of Sale (POS) berbasis web untuk toko retail, usaha kecil, dan UMKM. Arah pengembangan IRIS adalah menjadi platform operasional bisnis modular berbasis SaaS, bukan hanya aplikasi kasir.
 
-> **Status:** Tahap 2 — skeleton Flask (2026-11-25). Repository berisi dokumentasi proyek + kerangka aplikasi Flask yang bisa dijalankan (halaman placeholder dan `/health` di ketiga aplikasi). Modul operasional (kasir, produk, stok, pembelian, laporan, dst) **belum** diimplementasikan. Daftar fitur di dokumen adalah peta ruang lingkup produk — **bukan** pernyataan bahwa semua fitur sudah selesai atau tersedia.
+> **Status:** Tahap 3 — skema database v1 + autentikasi tenant (2026-11-25). Database tenant SQLite kini punya skema v1 (14 tabel) dan aplikasi tenant dilindungi login dengan role owner/admin/cashier. Modul operasional (kasir, produk, stok, pembelian, laporan, dst) **belum** diimplementasikan — yang ada baru daftar produk (baca saja). Daftar fitur di dokumen adalah peta ruang lingkup produk — **bukan** pernyataan bahwa semua fitur sudah selesai atau tersedia.
 
 - **Nama proyek:** IRIS Platform
 - **Nama aplikasi:** POS IRIS
@@ -23,12 +23,12 @@ Komponen aplikasi (skeleton tahap 2 — sudah ada, masih placeholder):
 | Aplikasi | File | Port | Fungsi |
 |---|---|---|---|
 | Landing | `landing_app.py` | 5000 | Situs publik, informasi produk, pendaftaran (placeholder) |
-| Tenant | `tenant_app.py` | 5001 | Aplikasi operasional milik tenant (placeholder) |
-| Super Admin | `superadmin_app.py` | 5002 | Pengelolaan platform dan tenant (placeholder) |
+| Tenant | `tenant_app.py` | 5001 | Aplikasi operasional milik tenant — **login wajib**, dashboard + daftar produk |
+| Super Admin | `superadmin_app.py` | 5002 | Pengelolaan platform dan tenant (placeholder, **belum ada auth**) |
 
-File pendukung: `config.py` (config dari environment), `iris_db.py` (`get_tenant_db` + validasi slug tenant), `templates/` (Jinja2), `tests/test_apps.py`, `requirements.txt`, `.env.example`.
+File pendukung: `config.py` (config dari environment), `iris_db.py` (`get_tenant_db`, `init_tenant_db`, `create_user`, `verify_user`), `iris_schema.sql` (skema v1, 14 tabel), `iris_auth.py` (Flask-Login + `require_role`), `forms.py` (form login), `templates/` (Jinja2), `tests/`, `requirements.txt`, `.env.example`.
 
-## Menjalankan skeleton (lokal)
+## Menjalankan aplikasi (lokal)
 
 ```bash
 python3.12 -m venv .venv
@@ -36,18 +36,26 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # lalu isi SECRET_KEY
 python landing_app.py    # http://127.0.0.1:5000
-python tenant_app.py     # http://127.0.0.1:5001/?tenant=toko-demo
+python tenant_app.py     # http://127.0.0.1:5001
 python superadmin_app.py # http://127.0.0.1:5002
+```
+
+Buat owner pertama untuk sebuah tenant, lalu masuk lewat `/login`:
+
+```bash
+flask --app tenant_app create-owner --tenant toko-demo \
+  --username owner --password 'minimal-8-karakter'
+# Buka http://127.0.0.1:5001/login — tenant: toko-demo
 ```
 
 Tes:
 
 ```bash
 python -m pytest tests/ -q
-# Terakhir diuji lokal: 3 passed (2026-11-25)
+# Terakhir diuji lokal: 7 passed (2026-11-25)
 ```
 
-> **Peringatan keamanan:** Super Admin dan Tenant di skeleton ini belum punya autentikasi/otorisasi, dan identitas tenant di `tenant_app.py` masih dari query `?tenant=` untuk keperluan lokal saja. Jangan mengekspos tiga aplikasi ini ke internet sebelum login dan RBAC ditambahkan. Secret hanya dari environment (`.env`, tidak di-commit).
+> **Peringatan keamanan:** Super Admin masih **belum punya autentikasi** — jangan diekspos ke internet. Aplikasi tenant sudah login + role, tapi belum ada rate limiting login, penguncian akun, atau reset password. Secret hanya dari environment (`.env`, tidak di-commit); password pengguna disimpan sebagai hash (Werkzeug/scrypt), bukan teks mentah.
 
 ## Dokumentasi
 

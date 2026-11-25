@@ -17,18 +17,17 @@ def test_landing_index_and_health():
     assert client.get("/register").status_code == 200
 
 
-def test_tenant_requires_valid_slug(tmp_path, monkeypatch):
+# Sejak tahap 3, dashboard tenant dilindungi login: tanpa login, "/"
+# mengalihkan ke /login (302). Validasi slug & alur login diuji di
+# tests/test_schema_auth.py.
+def test_tenant_requires_login(tmp_path, monkeypatch):
     monkeypatch.setenv("IRIS_DATA_DIR", str(tmp_path))
     app = tenant_app.create_app()
     app.config["DATA_DIR"] = str(tmp_path)
     client = app.test_client()
     assert client.get("/health").get_json() == {"status": "ok", "app": "tenant"}
-    assert client.get("/").status_code == 400
-    assert client.get("/?tenant=../etc").status_code == 400
-    resp = client.get("/?tenant=toko-demo")
-    assert resp.status_code == 200
-    assert b"toko-demo" in resp.data
-    assert (tmp_path / "toko-demo" / "iris.db").exists()
+    assert client.get("/").status_code == 302
+    assert client.get("/login").status_code == 200
 
 
 def test_superadmin_index_and_health(tmp_path, monkeypatch):

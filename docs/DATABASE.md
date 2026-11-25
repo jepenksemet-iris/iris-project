@@ -12,7 +12,28 @@ tenants/
     └── iris.db
 ```
 
-Akses database tenant dilakukan melalui mekanisme seperti `get_tenant_db`.
+Akses database tenant dilakukan melalui `get_tenant_db(slug)` di `iris_db.py`, dan skema diterapkan oleh `init_tenant_db(slug)` dari `iris_schema.sql`.
+
+## Skema v1 (tahap 3, 2026-11-25)
+
+Versi skema dicatat di `PRAGMA user_version = 1`. Migrasi berikutnya harus menaikkan versi ini secara eksplisit.
+
+| Tabel | Isi |
+|---|---|
+| `users` | Pengguna tenant: username unik, `password_hash` (Werkzeug/scrypt), `full_name`, role (`owner`/`admin`/`cashier`), `outlet_id`, `is_active` |
+| `outlets` | Outlet/cabang tenant |
+| `categories` | Kategori produk |
+| `units` | Satuan produk (pcs, kg, liter, dus, …) |
+| `products` | SKU unik, barcode, nama, kategori, satuan, harga beli/jual, `min_stock` |
+| `stock` | Stok per produk × outlet (primary key gabungan) |
+| `customers` | Pelanggan |
+| `suppliers` | Pemasok |
+| `sales` + `sale_items` | Penjualan dan rincian barangnya |
+| `purchases` + `purchase_items` | Pembelian dan rincian barangnya |
+| `stock_movements` | Riwayat perubahan stok (sale/purchase/adjustment/return/transfer) — sumber audit |
+| `cash_transactions` | Pemasukan/pengeluaran kas di luar penjualan & pembelian |
+
+Aturan: uang disimpan sebagai INTEGER (rupiah) untuk menghindari kesalahan pembulatan float; foreign key aktif (`PRAGMA foreign_keys = ON`); indeks pada `products.category_id`, `stock.outlet_id`, `sales(outlet_id, created_at)`, `sale_items.sale_id`, dan `stock_movements(product_id, created_at)`.
 
 ## Ketentuan desain
 
@@ -23,4 +44,4 @@ Akses database tenant dilakukan melalui mekanisme seperti `get_tenant_db`.
 - Backup dan pemulihan harus memperhitungkan database setiap tenant.
 - Jangan menganggap struktur aktual sama dengan contoh ini sebelum memeriksa repository/kode aktual.
 
-> Skema database aktual termasuk hal yang masih harus diverifikasi (dokumen induk bagian 14).
+> Skema di atas adalah skema awal (v1) yang dibuat pada tahap 3 — isi tabelnya mengikuti peta modul di dokumen induk, bukan dari sistem yang sudah berjalan sebelumnya. Perubahan kolom/tabel berikutnya adalah migrasi, bukan edit diam-diam.

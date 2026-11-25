@@ -2,6 +2,13 @@
 {% block title %}Tenant {{ tenant }} — POS IRIS{% endblock %}
 {% block content %}
 <h1>Dashboard Tenant: {{ tenant }}</h1>
-<p>Database tenant: <code>{{ db_path }}</code></p>
-<p>Modul kasir, produk, stok, pembelian, penjualan, keuangan, dan laporan belum diimplementasikan — lihat <code>docs/MODULES.md</code>.</p>
+<p>Masuk sebagai <strong>{{ user.full_name or user.username }}</strong> ({{ user.role }}).
+<a href="/logout">Keluar</a></p>
+<ul>
+  <li>Skema database: v{{ schema_version }}</li>
+  <li>Pengguna terdaftar: {{ users }}</li>
+  <li>Produk terdaftar: {{ products }}</li>
+</ul>
+<p><a href="/products">Lihat produk</a></p>
+<p>Modul kasir, stok, pembelian, penjualan, keuangan, dan laporan belum diimplementasikan — lihat <code>docs/MODULES.md</code>.</p>
 {% endblock %}
