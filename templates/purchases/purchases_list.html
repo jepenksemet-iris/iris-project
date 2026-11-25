@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Riwayat Pembelian — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Riwayat Pembelian</h1>
+<p><a href="/purchases/new">Buat pembelian baru</a> | <a href="/suppliers">Pemasok</a></p>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul>
+  {% for category, message in messages %}
+  <li><strong>{{ category }}:</strong> {{ message }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+<form method="get" action="/purchases">
+  <label>Cari nomor: <input type="search" name="q" value="{{ q }}"></label>
+  <label>Pemasok:
+    <select name="pemasok">
+      <option value="">Semua</option>
+      {% for s in suppliers %}
+      <option value="{{ s.id }}" {% if supplier_id == s.id|string %}selected{% endif %}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Status:
+    <select name="status">
+      <option value="">Semua</option>
+      {% for s in statuses %}
+      <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Dari: <input type="date" name="dari" value="{{ date_from }}"></label>
+  <label>Sampai: <input type="date" name="sampai" value="{{ date_to }}"></label>
+  <label>Urut:
+    <select name="urut">
+      <option value="newest" {% if order == 'newest' %}selected{% endif %}>Terbaru</option>
+      <option value="oldest" {% if order == 'oldest' %}selected{% endif %}>Terlama</option>
+    </select>
+  </label>
+  <button type="submit">Filter</button>
+</form>
+{% if purchases %}
+<table>
+  <tr><th>Nomor</th><th>Tanggal</th><th>Pemasok</th><th>Item</th><th>Total</th><th>Status</th><th></th></tr>
+  {% for p in purchases %}
+  <tr>
+    <td>{{ p.invoice_no }}</td>
+    <td>{{ p.created_at }}</td>
+    <td>{{ p.supplier_name or '-' }}</td>
+    <td>{{ p.item_count }}</td>
+    <td>Rp {{ p.total }}</td>
+    <td>{{ p.status }}</td>
+    <td><a href="/purchases/{{ p.id }}">Detail</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>Belum ada transaksi pembelian.</p>
+{% endif %}
+{% endblock %}

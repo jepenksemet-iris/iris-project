@@ -22,7 +22,7 @@ from test_migration_v3 import _build_v2_db
 def test_fresh_db_is_v4(tmp_path):
     conn = init_tenant_db("toko-demo", data_dir=str(tmp_path))
     try:
-        assert get_schema_version(conn) == SCHEMA_VERSION == 4
+        assert get_schema_version(conn) == SCHEMA_VERSION == 5
         assert "sale_void" in conn.execute(
             "SELECT sql FROM sqlite_master WHERE name = 'stock_movements'"
         ).fetchone()["sql"]
@@ -48,7 +48,7 @@ def test_migrate_v3_to_v4_keeps_data(tmp_path):
     conn.close()
     conn = init_tenant_db("toko-demo", data_dir=str(tmp_path))
     try:
-        assert get_schema_version(conn) == 4
+        assert get_schema_version(conn) == 5
         assert conn.execute(
             "SELECT COUNT(*) n FROM sales").fetchone()["n"] == 1
         assert conn.execute(
@@ -61,7 +61,7 @@ def test_migrate_v3_to_v4_keeps_data(tmp_path):
     # Migrasi ulang idempotent.
     conn = init_tenant_db("toko-demo", data_dir=str(tmp_path))
     try:
-        assert get_schema_version(conn) == 4
+        assert get_schema_version(conn) == 5
         assert conn.execute(
             "SELECT COUNT(*) n FROM sales").fetchone()["n"] == 1
     finally:

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Pembelian {{ purchase.invoice_no }} — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Pembelian {{ purchase.invoice_no }}</h1>
+<p><a href="/purchases">Kembali ke riwayat</a></p>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul>
+  {% for category, message in messages %}
+  <li><strong>{{ category }}:</strong> {{ message }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+<ul>
+  <li>Tanggal: {{ purchase.created_at }}</li>
+  <li>Pemasok: {{ purchase.supplier_name or '— Tanpa pemasok —' }}</li>
+  <li>Dicatat oleh: {{ purchase.created_by_name or '-' }}</li>
+  <li>Status: {{ purchase.status }}</li>
+  {% if purchase.notes %}<li>Catatan: {{ purchase.notes }}</li>{% endif %}
+  {% if purchase.status == 'cancelled' %}
+  <li><strong>Pembelian ini DIBATALKAN.</strong></li>
+  <li>Alasan: {{ purchase.cancel_reason }}</li>
+  <li>Dibatalkan oleh: {{ purchase.cancelled_by_name or '-' }} pada {{ purchase.cancelled_at }}</li>
+  {% endif %}
+</ul>
+<table>
+  <tr><th>Produk</th><th>SKU</th><th>Satuan</th><th>Kuantitas</th><th>Harga beli</th><th>Subtotal</th></tr>
+  {% for item in items %}
+  <tr>
+    <td>{{ item.product_name }}</td>
+    <td>{{ item.sku or '-' }}</td>
+    <td>{{ item.unit or '-' }}</td>
+    <td>{{ item.qty }}</td>
+    <td>Rp {{ item.price }}</td>
+    <td>Rp {{ (item.price * item.qty)|int }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p>Total: Rp {{ purchase.total }}</p>
+{% if can_cancel and purchase.status == 'received' %}
+<hr>
+<h2>Batalkan pembelian</h2>
+<p>Pembatalan tidak menghapus transaksi ini: status berubah menjadi <em>cancelled</em> dan stok dikembalikan lewat mutasi pembalik. Pembatalan ditolak jika stok saat ini tidak mencukupi (misalnya sebagian barang sudah terjual).</p>
+<form method="post" action="/purchases/{{ purchase.id }}/cancel" onsubmit="return confirm('Batalkan pembelian {{ purchase.invoice_no }} dan kurangi stok?');">
+  {{ void_form.hidden_tag() }}
+  <p>{{ void_form.reason.label }}<br>{{ void_form.reason(size=60) }}{% for e in void_form.reason.errors %} <span>{{ e }}</span>{% endfor %}</p>
+  <p><button type="submit">Batalkan pembelian</button></p>
+</form>
+{% endif %}
+{% endblock %}

@@ -31,7 +31,7 @@
 | Multi satuan / konversi satuan | Belum Ada | Tabel `units` ada; tidak ada tabel konversi atau logika konversi | P1 — tabel konversi + validasi server |
 | Multi harga jual / level harga pelanggan | Belum Ada | `products` hanya punya satu harga jual (per skema v1) | Perlu Keputusan Produk: model harga (per pelanggan/per kuantitas) |
 | Nomor serial item | Belum Ada | Tidak ada tabel serial | P3 / Tidak Relevan untuk target toko kelontong — tunda sampai ada permintaan |
-| Data Supplier | Parsial | Tabel `suppliers` ada; tanpa route/template/tes UI | Daftar + tambah/edit supplier menyertai modul Pembelian (P0) |
+| Data Supplier | Sudah Ada dan Teruji | **P1 Tahap 6 (2026-11-25):** daftar + cari + tambah/edit/arsip/aktifkan pemasok (`/suppliers`, owner/admin; `tests/test_purchases.py`) | — |
 | Data Pelanggan, Grup Pelanggan, Poin, Wilayah/Subwilayah | Parsial | Tabel `customers` ada; tanpa route/template; grup/poin/wilayah tidak ada di skema | Pelanggan dasar P0 (menyertai kasir); grup/poin P2 |
 | Data Sales | Belum Ada | Tidak ada tabel sales | P2 (komisi sales) — tunda |
 | Data pendukung: Satuan, Department/Gudang, Merek, Bank, E-Money | Parsial | `units, outlets` ada di skema; merek/bank/e-money tidak ada | Merek + gudang/outlet menyertai Produk/Persediaan (P0/P1); bank/e-money P1 (menyertai pembayaran) |
@@ -41,7 +41,7 @@
 | Kapabilitas benchmark | Status IRIS | Bukti | Gap / Rekomendasi |
 |---|---|---|---|
 | Pesanan Pembelian (PO) | Belum Ada | Tidak ada tabel PO; `purchases` tidak membedakan PO vs penerimaan | P0 — rancang PO sebagai dokumen terpisah atau status pada `purchases` (keputusan desain sebelum coding) |
-| Daftar / Input Pembelian (penerimaan) | Belum Ada | Tabel `purchases, purchase_items` ada; tanpa route/template/logika; penerimaan **belum** menambah stok | P0 — penerimaan harus menambah stok dalam satu transaksi DB + mutasi `stock_movements` |
+| Daftar / Input Pembelian (penerimaan) | Sudah Ada dan Teruji | **P1 Tahap 6 (2026-11-25):** form pembelian multi-item + riwayat/detail (`/purchases`), penerimaan langsung menambah stok atomik lewat mutasi `purchase` + pembatalan dengan mutasi `purchase_void` (skema v5; `tests/test_purchases.py`) | P0 — PO draft (`ordered`) belum ada; retur pembelian terpisah |
 | History Harga Beli | Belum Ada | Dapat diturunkan dari `purchase_items` setelah pembelian ada | P1 — laporan setelah modul pembelian jalan |
 | Pembayaran Hutang, Status Lunas BG/Cek | Belum Ada | Tidak ada tabel hutang/pembayaran hutang | P0 (hutang) — hutang = sisa nilai pembelian kredit; BG/cek P1 |
 | Retur Pembelian | Belum Ada | Tanpa tabel/route | P0 — retur mengoreksi stok + hutang dalam satu transaksi |

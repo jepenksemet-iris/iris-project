@@ -100,6 +100,23 @@ class CartRemoveForm(FlaskForm):
     submit = SubmitField("Hapus")
 
 
+class SupplierForm(FlaskForm):
+    name = StringField(
+        "Nama pemasok",
+        validators=[DataRequired(), Length(max=200)],
+    )
+    phone = StringField("Telepon/WhatsApp", validators=[Optional(), Length(max=50)])
+    address = StringField("Alamat", validators=[Optional(), Length(max=500)])
+    notes = StringField("Catatan", validators=[Optional(), Length(max=500)])
+    submit = SubmitField("Simpan pemasok")
+
+
+class PurchaseForm(FlaskForm):
+    supplier_id = SelectField("Pemasok", coerce=int, validators=[Optional()])
+    notes = StringField("Catatan", validators=[Optional(), Length(max=500)])
+    submit = SubmitField("Simpan pembelian")
+
+
 class VoidForm(FlaskForm):
     reason = StringField(
         "Alasan pembatalan",

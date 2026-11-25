@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Pembelian Baru — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Pembelian Baru</h1>
+<p><a href="/purchases">Kembali ke riwayat pembelian</a></p>
+<p>Pembelian langsung berstatus <strong>diterima</strong>: stok bertambah saat disimpan. Total dihitung ulang di server dari harga beli yang diisi.</p>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul>
+  {% for category, message in messages %}
+  <li><strong>{{ category }}:</strong> {{ message }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+<form method="post" id="purchase-form">
+  {{ form.hidden_tag() }}
+  <p>{{ form.supplier_id.label }}<br>{{ form.supplier_id() }}</p>
+  <p>{{ form.notes.label }}<br>{{ form.notes(size=60) }}</p>
+  <h2>Item</h2>
+  <table id="items-table">
+    <tr><th>Produk</th><th>Kuantitas</th><th>Harga beli (Rp)</th><th>Subtotal</th><th></th></tr>
+    <tbody id="items-body">
+      {% for n in range(3) %}
+      <tr class="item-row">
+        <td>
+          <select name="product_id">
+            <option value="">— Pilih produk —</option>
+            {% for p in products %}
+            <option value="{{ p.id }}">{{ p.name }} ({{ p.sku }}) — Rp {{ p.sell_price }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td><input type="number" name="qty" step="any" min="0" value="1" class="qty"></td>
+        <td><input type="number" name="price" min="0" value="0" class="price"></td>
+        <td class="row-subtotal">Rp 0</td>
+        <td><button type="button" class="remove-row">Hapus</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p><button type="button" id="add-row">Tambah baris</button></p>
+  <p><strong>Total: <span id="total">Rp 0</span></strong> <small>(perkiraan di browser; total akhir dihitung server)</small></p>
+  <p>{{ form.submit() }}</p>
+</form>
+<script>
+(function () {
+  var body = document.getElementById('items-body');
+  function recalc() {
+    var total = 0;
+    body.querySelectorAll('.item-row').forEach(function (row) {
+      var qty = parseFloat(row.querySelector('.qty').value) || 0;
+      var price = parseFloat(row.querySelector('.price').value) || 0;
+      var sub = Math.round(qty * price);
+      row.querySelector('.row-subtotal').textContent = 'Rp ' + sub;
+      total += sub;
+    });
+    document.getElementById('total').textContent = 'Rp ' + total;
+  }
+  body.addEventListener('input', recalc);
+  body.addEventListener('click', function (e) {
+    if (e.target.classList.contains('remove-row')) {
+      e.target.closest('.item-row').remove();
+      recalc();
+    }
+  });
+  document.getElementById('add-row').addEventListener('click', function () {
+    var first = body.querySelector('.item-row');
+    if (!first) return;
+    var clone = first.cloneNode(true);
+    clone.querySelectorAll('input').forEach(function (i) { i.value = i.classList.contains('qty') ? '1' : '0'; });
+    clone.querySelector('select').selectedIndex = 0;
+    body.appendChild(clone);
+    recalc();
+  });
+  recalc();
+})();
+</script>
+{% endblock %}

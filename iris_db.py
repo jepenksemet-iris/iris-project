@@ -1,4 +1,4 @@
-"""Akses database SQLite per tenant (tahap 10: skema v4 + pembatalan kasir).
+"""Akses database SQLite per tenant (tahap 11: skema v5 + modul pembelian).
 
 Pola dari dokumen proyek:
     <DATA_DIR>/<tenant-slug>/iris.db
@@ -22,16 +22,18 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 _SCHEMA_PATH = Path(__file__).with_name("iris_schema.sql")
 
-# Jenis mutasi stok yang sah (skema v4). 'adjustment' dipertahankan
+# Jenis mutasi stok yang sah (skema v5). 'adjustment' dipertahankan
 # untuk kompatibilitas data lama; form baru memakai opening_balance /
 # adjustment_in / adjustment_out. 'sale_void' = mutasi pembalik
-# pembatalan penjualan (P1 Tahap 5); 'return' dicadangkan untuk retur.
+# pembatalan penjualan (P1 Tahap 5); 'purchase_void' = mutasi pembalik
+# pembatalan pembelian (P1 Tahap 6); 'return' dicadangkan untuk retur.
 STOCK_MOVEMENT_KINDS = (
     "sale", "purchase", "adjustment", "return", "transfer",
-    "opening_balance", "adjustment_in", "adjustment_out", "sale_void",
+    "opening_balance", "adjustment_in", "adjustment_out",
+    "sale_void", "purchase_void",
 )
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
@@ -268,8 +270,97 @@ def migrate_tenant_db(conn, from_version):
         from_version = 3
     if from_version == 3:
         _migrate_v3_to_v4(conn)
+        from_version = 4
+    if from_version == 4:
+        _migrate_v4_to_v5(conn)
         return
     raise ValueError(f"tidak ada jalur migrasi dari versi skema {from_version}")
+
+
+def _migrate_v4_to_v5(conn):
+    """v4 -> v5 (modul pembelian).
+
+    - suppliers: tambah notes/is_active/updated_at (ALTER).
+    - purchases: tambah notes + kolom pembatalan cancel_reason/
+      cancelled_by/cancelled_at (ALTER).
+    - purchase_items: tambah snapshot product_name/sku/unit (ALTER).
+    - stock_movements: dibuat ulang untuk menambah jenis 'purchase_void'
+      di CHECK (data disalin apa adanya, tanpa pemetaan jenis).
+    - Index baru purchases/purchase_items.
+    """
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        with conn:
+            for table, col, ddl in (
+                ("suppliers", "notes",
+                 "ALTER TABLE suppliers ADD COLUMN notes TEXT NOT NULL DEFAULT ''"),
+                ("suppliers", "is_active",
+                 "ALTER TABLE suppliers ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"),
+                ("suppliers", "updated_at",
+                 "ALTER TABLE suppliers ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'))"),
+                ("purchases", "notes",
+                 "ALTER TABLE purchases ADD COLUMN notes TEXT NOT NULL DEFAULT ''"),
+                ("purchases", "cancel_reason",
+                 "ALTER TABLE purchases ADD COLUMN cancel_reason TEXT"),
+                ("purchases", "cancelled_by",
+                 "ALTER TABLE purchases ADD COLUMN cancelled_by INTEGER REFERENCES users (id) ON DELETE SET NULL"),
+                ("purchases", "cancelled_at",
+                 "ALTER TABLE purchases ADD COLUMN cancelled_at TEXT"),
+                ("purchase_items", "product_name",
+                 "ALTER TABLE purchase_items ADD COLUMN product_name TEXT NOT NULL DEFAULT ''"),
+                ("purchase_items", "sku",
+                 "ALTER TABLE purchase_items ADD COLUMN sku TEXT"),
+                ("purchase_items", "unit",
+                 "ALTER TABLE purchase_items ADD COLUMN unit TEXT"),
+            ):
+                cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
+                if col not in cols:
+                    conn.execute(ddl)
+            conn.execute(
+                "CREATE TABLE stock_movements_new ("
+                " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                " product_id INTEGER NOT NULL REFERENCES products (id),"
+                " outlet_id INTEGER NOT NULL REFERENCES outlets (id),"
+                " qty REAL NOT NULL,"
+                " kind TEXT NOT NULL CHECK (kind IN ('sale', 'purchase',"
+                " 'adjustment', 'return', 'transfer', 'opening_balance',"
+                " 'adjustment_in', 'adjustment_out', 'sale_void',"
+                " 'purchase_void')),"
+                " ref_type TEXT NOT NULL DEFAULT '',"
+                " ref_id INTEGER,"
+                " note TEXT NOT NULL DEFAULT '',"
+                " user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,"
+                " effective_date TEXT,"
+                " created_at TEXT NOT NULL DEFAULT (datetime('now')))"
+            )
+            conn.execute(
+                "INSERT INTO stock_movements_new"
+                " (id, product_id, outlet_id, qty, kind, ref_type, ref_id,"
+                "  note, user_id, effective_date, created_at)"
+                " SELECT id, product_id, outlet_id, qty, kind, ref_type,"
+                "  ref_id, note, user_id, effective_date, created_at"
+                " FROM stock_movements"
+            )
+            conn.execute("DROP TABLE stock_movements")
+            conn.execute("ALTER TABLE stock_movements_new RENAME TO stock_movements")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_stock_movements_product"
+                " ON stock_movements (product_id, created_at)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_purchases_created"
+                " ON purchases (created_at)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_purchases_supplier"
+                " ON purchases (supplier_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase"
+                " ON purchase_items (purchase_id)"
+            )
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
 
 
 def init_tenant_db(slug, data_dir=None):
@@ -1057,6 +1148,322 @@ def void_sale(conn, sale_id, user_id, reason):
             )
             if cur.rowcount != 1:
                 raise ValueError("transaksi sudah berubah status")
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.isolation_level = wasolation
+    return True
+
+
+# ----------------------------------------------------------------------
+# Pemasok & pembelian (P1 Tahap 6)
+# ----------------------------------------------------------------------
+PURCHASE_STATUSES = ("ordered", "received", "returned", "cancelled")
+
+
+def list_suppliers(conn, q=None, include_inactive=False):
+    sql = "SELECT * FROM suppliers"
+    args, where = [], []
+    if q:
+        where.append("(name LIKE ? OR phone LIKE ? OR address LIKE ?)")
+        args += [f"%{q}%"] * 3
+    if not include_inactive:
+        where.append("is_active = 1")
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY name ASC"
+    return conn.execute(sql, args).fetchall()
+
+
+def get_supplier(conn, supplier_id):
+    return conn.execute(
+        "SELECT * FROM suppliers WHERE id = ?", (supplier_id,)).fetchone()
+
+
+def create_supplier(conn, name, phone="", address="", notes=""):
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("nama pemasok wajib diisi")
+    if len(name) > 200:
+        raise ValueError("nama pemasok maksimal 200 karakter")
+    with conn:
+        cur = conn.execute(
+            "INSERT INTO suppliers (name, phone, address, notes)"
+            " VALUES (?, ?, ?, ?)",
+            (name, (phone or "").strip(), (address or "").strip(),
+             (notes or "").strip()),
+        )
+    return cur.lastrowid
+
+
+def update_supplier(conn, supplier_id, name, phone="", address="", notes=""):
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("nama pemasok wajib diisi")
+    if len(name) > 200:
+        raise ValueError("nama pemasok maksimal 200 karakter")
+    with conn:
+        cur = conn.execute(
+            "UPDATE suppliers SET name = ?, phone = ?, address = ?,"
+            " notes = ?, updated_at = datetime('now') WHERE id = ?",
+            (name, (phone or "").strip(), (address or "").strip(),
+             (notes or "").strip(), supplier_id),
+        )
+        if cur.rowcount != 1:
+            raise ValueError("pemasok tidak ditemukan")
+    return True
+
+
+def set_supplier_active(conn, supplier_id, active):
+    with conn:
+        cur = conn.execute(
+            "UPDATE suppliers SET is_active = ?,"
+            " updated_at = datetime('now') WHERE id = ?",
+            (1 if active else 0, supplier_id),
+        )
+        if cur.rowcount != 1:
+            raise ValueError("pemasok tidak ditemukan")
+    return True
+
+
+def _generate_purchase_no(conn):
+    """Nomor pembelian PO-YYYYMMDD-NNNN, urutan harian per tenant.
+
+    Dipanggil di dalam transaksi BEGIN IMMEDIATE; keunikan dijamin
+    UNIQUE constraint database."""
+    today = date.today().strftime("%Y%m%d")
+    prefix = f"PO-{today}-"
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM purchases WHERE invoice_no LIKE ?",
+        (prefix + "%",),
+    ).fetchone()
+    return f"{prefix}{row['n'] + 1:04d}"
+
+
+def create_purchase(conn, outlet_id, user_id, items, supplier_id=None,
+                    notes=""):
+    """Simpan pembelian + penerimaan stok secara atomik (BEGIN IMMEDIATE).
+
+    Transaksi dibuat langsung berstatus 'received': header + detail
+    (snapshot nama/SKU/satuan/harga beli) + satu mutasi masuk
+    kind='purchase' (ref_type='purchase', ref_id=purchase id) per item.
+    Total dihitung ulang dari database (harga beli dari form, kuantitas
+    boleh pecahan karena pembelian per berat dimungkinkan). Harga jual
+    produk TIDAK diubah. Gagal di langkah mana pun -> rollback.
+    """
+    if not items:
+        raise ValueError("pembelian harus memiliki minimal satu item")
+    if len(items) > MAX_CART_ITEMS:
+        raise ValueError("pembelian melebihi batas item")
+    if supplier_id is not None:
+        supplier = get_supplier(conn, supplier_id)
+        if supplier is None:
+            raise ValueError("pemasok tidak ditemukan")
+        if not supplier["is_active"]:
+            raise ValueError("pemasok tidak aktif")
+    wasolation = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        for attempt in range(3):
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    total = 0
+                    lines = []
+                    for item in items:
+                        product = get_product(conn, item.get("product_id"))
+                        if product is None:
+                            raise ValueError("produk tidak ditemukan")
+                        if not product["is_active"]:
+                            raise ValueError(
+                                f"produk {product['name']!r} nonaktif")
+                        qty = float(item.get("qty", 0))
+                        if qty <= 0:
+                            raise ValueError(
+                                "kuantitas harus lebih dari 0")
+                        price = int(item.get("price", 0))
+                        if price < 0:
+                            raise ValueError(
+                                "harga beli tidak boleh negatif")
+                        unit_row = None
+                        if product["unit_id"]:
+                            unit_row = conn.execute(
+                                "SELECT name FROM units WHERE id = ?",
+                                (product["unit_id"],),
+                            ).fetchone()
+                        subtotal = int(round(price * qty))
+                        total += subtotal
+                        lines.append({
+                            "product": product, "qty": qty, "price": price,
+                            "unit": unit_row["name"] if unit_row else None,
+                        })
+                    invoice_no = _generate_purchase_no(conn)
+                    cur = conn.execute(
+                        "INSERT INTO purchases"
+                        " (outlet_id, supplier_id, user_id, invoice_no,"
+                        "  status, total, notes)"
+                        " VALUES (?, ?, ?, ?, 'received', ?, ?)",
+                        (outlet_id, supplier_id, user_id, invoice_no,
+                         total, (notes or "").strip()),
+                    )
+                    purchase_id = cur.lastrowid
+                    for line in lines:
+                        p = line["product"]
+                        conn.execute(
+                            "INSERT INTO purchase_items"
+                            " (purchase_id, product_id, product_name, sku,"
+                            "  unit, qty, price)"
+                            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (purchase_id, p["id"], p["name"], p["sku"],
+                             line["unit"], line["qty"], line["price"]),
+                        )
+                        _apply_stock_change(
+                            conn, p["id"], outlet_id, line["qty"],
+                            note=f"Pembelian {invoice_no}",
+                            user_id=user_id, kind="purchase",
+                            ref_type="purchase", ref_id=purchase_id,
+                        )
+                    conn.execute("COMMIT")
+                    return purchase_id
+                except BaseException:
+                    conn.execute("ROLLBACK")
+                    raise
+            except sqlite3.IntegrityError as exc:
+                if "purchases.invoice_no" in str(exc) and attempt < 2:
+                    continue
+                raise
+    finally:
+        conn.isolation_level = wasolation
+
+
+def get_purchase(conn, purchase_id):
+    """Header pembelian + items + pemasok + pencatat (atau None)."""
+    row = conn.execute(
+        "SELECT p.*, s.name AS supplier_name,"
+        " u.full_name AS created_by_name,"
+        " v.full_name AS cancelled_by_name FROM purchases p"
+        " LEFT JOIN suppliers s ON s.id = p.supplier_id"
+        " LEFT JOIN users u ON u.id = p.user_id"
+        " LEFT JOIN users v ON v.id = p.cancelled_by"
+        " WHERE p.id = ?",
+        (purchase_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    items = conn.execute(
+        "SELECT * FROM purchase_items WHERE purchase_id = ? ORDER BY id",
+        (purchase_id,),
+    ).fetchall()
+    return {"purchase": row, "items": items}
+
+
+def list_purchases(conn, q=None, supplier_id=None, status=None,
+                   date_from=None, date_to=None, order="newest",
+                   limit=100):
+    """Daftar pembelian. Nilai filter yang tidak dikenal diabaikan."""
+    sql = (
+        "SELECT p.*, s.name AS supplier_name,"
+        " (SELECT COUNT(*) FROM purchase_items i WHERE i.purchase_id = p.id)"
+        "  AS item_count FROM purchases p"
+        " LEFT JOIN suppliers s ON s.id = p.supplier_id"
+    )
+    args, where = [], []
+    if q:
+        where.append("p.invoice_no LIKE ?")
+        args.append(f"%{q}%")
+    if supplier_id:
+        where.append("p.supplier_id = ?")
+        args.append(supplier_id)
+    if status in PURCHASE_STATUSES:
+        where.append("p.status = ?")
+        args.append(status)
+    if date_from:
+        where.append("date(p.created_at) >= ?")
+        args.append(date_from)
+    if date_to:
+        where.append("date(p.created_at) <= ?")
+        args.append(date_to)
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    if order == "oldest":
+        sql += " ORDER BY p.created_at ASC, p.id ASC LIMIT ?"
+    else:
+        sql += " ORDER BY p.created_at DESC, p.id DESC LIMIT ?"
+    args.append(limit)
+    return conn.execute(sql, args).fetchall()
+
+
+def cancel_purchase(conn, purchase_id, user_id, reason):
+    """Batalkan pembelian yang sudah diterima, secara atomik.
+
+    Hanya pembelian berstatus 'received'. Stok dikembalikan lewat satu
+    mutasi kind='purchase_void' per item — tetapi DITOLAK bila stok
+    saat ini tidak mencukupi (mis. sebagian barang sudah terjual),
+    karena pembatalan tidak boleh membuat stok negatif. Pembatalan
+    ganda dicegah (cek status + mutasi pembalik yang sudah ada).
+    Transaksi, item, dan mutasi 'purchase' asli tidak dihapus/diubah.
+    """
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("alasan pembatalan wajib diisi")
+    if len(reason) > 500:
+        raise ValueError("alasan pembatalan maksimal 500 karakter")
+    wasolation = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = conn.execute(
+                "SELECT * FROM purchases WHERE id = ?", (purchase_id,)
+            ).fetchone()
+            if row is None:
+                raise ValueError("pembelian tidak ditemukan")
+            if row["status"] == "cancelled":
+                raise ValueError("pembelian sudah dibatalkan")
+            if row["status"] != "received":
+                raise ValueError(
+                    f"pembelian berstatus {row['status']!r} tidak dapat"
+                    " dibatalkan")
+            existing = conn.execute(
+                "SELECT 1 FROM stock_movements"
+                " WHERE ref_type = 'purchase_void' AND ref_id = ? LIMIT 1",
+                (purchase_id,),
+            ).fetchone()
+            if existing:
+                raise ValueError(
+                    "mutasi pembalik untuk pembelian ini sudah ada")
+            items = conn.execute(
+                "SELECT * FROM purchase_items WHERE purchase_id = ?"
+                " ORDER BY id",
+                (purchase_id,),
+            ).fetchall()
+            for item in items:
+                current = get_stock_qty(conn, item["product_id"],
+                                        row["outlet_id"])
+                if current < item["qty"]:
+                    raise ValueError(
+                        f"stok tidak mencukupi untuk membatalkan"
+                        f" (produk {item['product_name']!r}: stok"
+                        f" {current:g}, perlu {item['qty']:g})")
+            for item in items:
+                _apply_stock_change(
+                    conn, item["product_id"], row["outlet_id"],
+                    -item["qty"],
+                    note=f"Pembatalan {row['invoice_no']}: {reason}",
+                    user_id=user_id, kind="purchase_void",
+                    ref_type="purchase_void", ref_id=purchase_id,
+                )
+            cur = conn.execute(
+                "UPDATE purchases SET status = 'cancelled',"
+                " cancel_reason = ?, cancelled_by = ?,"
+                " cancelled_at = datetime('now')"
+                " WHERE id = ? AND status = 'received'",
+                (reason, user_id, purchase_id),
+            )
+            if cur.rowcount != 1:
+                raise ValueError("pembelian sudah berubah status")
             conn.execute("COMMIT")
         except BaseException:
             conn.execute("ROLLBACK")

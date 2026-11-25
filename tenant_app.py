@@ -1,10 +1,12 @@
-"""Tenant app — POS IRIS (tahap 9: P1 tahap 3 checkout + riwayat, skema v3).
+"""Tenant app — POS IRIS (tahap 11: P1 tahap 6 modul pembelian, skema v5).
 
 Aplikasi operasional milik tenant. Modul produk & stok sudah ada:
 tambah/edit/arsip produk, penyesuaian stok atomik dengan ledger
-mutasi (stock_movements). Modul kasir: halaman + keranjang (tahap 2)
-dan checkout atomik + riwayat/detail/struk (tahap 3). Pembatalan
-masih belum diimplementasikan (lihat docs/MODULES.md).
+mutasi (stock_movements). Modul kasir: halaman + keranjang (tahap 2),
+checkout atomik + riwayat/detail/struk (tahap 3), pembatalan (tahap 5).
+Modul pembelian (tahap 6): pemasok + transaksi pembelian yang langsung
+diterima (stok bertambah atomik lewat ledger kind='purchase') +
+pembatalan pembelian (lihat docs/MODULES.md).
 
 Jalan di port 5001. Identitas tenant berasal dari LOGIN (disimpan di
 session), bukan lagi dari query ``?tenant=``.
@@ -45,20 +47,28 @@ from forms import (
     ConfirmForm,
     LoginForm,
     ProductForm,
+    PurchaseForm,
     StockAdjustForm,
+    SupplierForm,
     VoidForm,
 )
 from iris_auth import TenantUser, require_role, setup_auth
 from iris_db import (
     PAYMENT_METHODS,
+    PURCHASE_STATUSES,
     SALE_STATUSES,
     adjust_stock,
+    cancel_purchase,
     confirm_payment,
     create_product,
+    create_purchase,
     create_sale,
+    create_supplier,
     create_user,
     get_default_outlet,
+    get_purchase,
     get_sale,
+    get_supplier,
     get_or_create_category,
     get_or_create_unit,
     get_product,
@@ -69,8 +79,12 @@ from iris_db import (
     list_categories,
     list_outlets,
     list_products,
+    list_purchases,
     list_sales,
     list_stock_movements,
+    list_suppliers,
+    set_supplier_active,
+    update_supplier,
     void_sale,
     record_opening_balance,
     search_products,
@@ -566,6 +580,266 @@ def create_app(config_class=None):
         finally:
             conn.close()
         return redirect(url_for("sale_detail", sale_id=sale_id))
+
+    # ------------------------------------------------------------------
+    # Pemasok & pembelian (P1 Tahap 6)
+    # ------------------------------------------------------------------
+    def _parse_purchase_items():
+        """Baca baris item dinamis dari form: product_id/qty/price
+        berulang. Baris kosong diabaikan; nilai tidak valid -> ValueError
+        dengan pesan yang jelas. Total TIDAK dibaca dari browser."""
+        pids = request.form.getlist("product_id")
+        qtys = request.form.getlist("qty")
+        prices = request.form.getlist("price")
+        if not (len(pids) == len(qtys) == len(prices)):
+            raise ValueError("baris item tidak konsisten")
+        items = []
+        for pid, qty, price in zip(pids, qtys, prices):
+            if not pid:
+                continue
+            try:
+                product_id = int(pid)
+                qty_val = float(qty)
+                price_val = int(float(price))
+            except (TypeError, ValueError):
+                raise ValueError("kuantitas atau harga item tidak valid")
+            items.append({"product_id": product_id, "qty": qty_val,
+                          "price": price_val})
+        return items
+
+    @app.get("/suppliers")
+    @login_required
+    def suppliers_list():
+        slug = session["tenant"]
+        q = (request.args.get("q") or "").strip()
+        include_inactive = request.args.get("tampilkan_nonaktif") == "1"
+        conn = _db(slug)
+        try:
+            rows = list_suppliers(conn, q=q or None,
+                                  include_inactive=include_inactive)
+        finally:
+            conn.close()
+        return render_template(
+            "purchases/suppliers.html", tenant=slug, suppliers=rows, q=q,
+            include_inactive=include_inactive,
+            confirm_form=ConfirmForm(),
+        )
+
+    @app.route("/suppliers/new", methods=["GET", "POST"])
+    @require_role("owner", "admin")
+    def supplier_new():
+        slug = session["tenant"]
+        form = SupplierForm()
+        if form.validate_on_submit():
+            conn = _db(slug)
+            try:
+                try:
+                    create_supplier(conn, form.name.data, form.phone.data,
+                                    form.address.data, form.notes.data)
+                except ValueError as exc:
+                    flash(str(exc), "error")
+                else:
+                    flash("Pemasok ditambahkan.", "success")
+                    return redirect(url_for("suppliers_list"))
+            finally:
+                conn.close()
+        return render_template(
+            "purchases/supplier_form.html", tenant=slug, form=form,
+            title="Tambah Pemasok",
+        )
+
+    @app.route("/suppliers/<int:supplier_id>/edit", methods=["GET", "POST"])
+    @require_role("owner", "admin")
+    def supplier_edit(supplier_id):
+        slug = session["tenant"]
+        conn = _db(slug)
+        try:
+            supplier = get_supplier(conn, supplier_id)
+        finally:
+            conn.close()
+        if supplier is None:
+            abort(404)
+        form = SupplierForm(obj=supplier)
+        if form.validate_on_submit():
+            conn = _db(slug)
+            try:
+                try:
+                    update_supplier(conn, supplier_id, form.name.data,
+                                    form.phone.data, form.address.data,
+                                    form.notes.data)
+                except ValueError as exc:
+                    flash(str(exc), "error")
+                else:
+                    flash("Pemasok diperbarui.", "success")
+                    return redirect(url_for("suppliers_list"))
+            finally:
+                conn.close()
+        return render_template(
+            "purchases/supplier_form.html", tenant=slug, form=form,
+            title="Edit Pemasok",
+        )
+
+    @app.post("/suppliers/<int:supplier_id>/archive")
+    @require_role("owner", "admin")
+    def supplier_archive(supplier_id):
+        return _set_supplier(supplier_id, False)
+
+    @app.post("/suppliers/<int:supplier_id>/activate")
+    @require_role("owner", "admin")
+    def supplier_activate(supplier_id):
+        return _set_supplier(supplier_id, True)
+
+    def _set_supplier(supplier_id, active):
+        slug = session["tenant"]
+        form = ConfirmForm()
+        if not form.validate_on_submit():
+            flash("Token tidak valid.", "error")
+            return redirect(url_for("suppliers_list"))
+        conn = _db(slug)
+        try:
+            try:
+                set_supplier_active(conn, supplier_id, active)
+            except ValueError as exc:
+                flash(str(exc), "error")
+            else:
+                flash("Pemasok " + ("diaktifkan." if active else "diarsipkan."),
+                      "success")
+        finally:
+            conn.close()
+        return redirect(url_for("suppliers_list"))
+
+    @app.get("/purchases")
+    @login_required
+    def purchases_list():
+        from datetime import datetime
+
+        def _valid_date(value):
+            try:
+                datetime.strptime(value, "%Y-%m-%d")
+                return value
+            except (TypeError, ValueError):
+                return None
+
+        slug = session["tenant"]
+        q = (request.args.get("q") or "").strip()
+        supplier_id = request.args.get("pemasok") or ""
+        status = request.args.get("status") or ""
+        date_from = _valid_date(request.args.get("dari") or "")
+        date_to = _valid_date(request.args.get("sampai") or "")
+        order = request.args.get("urut") or "newest"
+        if order not in ("newest", "oldest"):
+            order = "newest"
+        conn = _db(slug)
+        try:
+            suppliers = list_suppliers(conn, include_inactive=True)
+            rows = list_purchases(
+                conn, q=q or None,
+                supplier_id=int(supplier_id) if supplier_id.isdigit() else None,
+                status=status or None, date_from=date_from, date_to=date_to,
+                order=order,
+            )
+        finally:
+            conn.close()
+        return render_template(
+            "purchases/purchases_list.html", tenant=slug, purchases=rows,
+            q=q, supplier_id=supplier_id, status=status,
+            date_from=date_from or "", date_to=date_to or "",
+            order=order, suppliers=suppliers, statuses=PURCHASE_STATUSES,
+        )
+
+    @app.route("/purchases/new", methods=["GET", "POST"])
+    @require_role("owner", "admin")
+    def purchase_new():
+        slug = session["tenant"]
+        conn = _db(slug)
+        try:
+            suppliers = list_suppliers(conn)
+            products = list_products(conn, limit=500)
+            form = PurchaseForm()
+            form.supplier_id.choices = [(0, "— Tanpa pemasok —")] + [
+                (s["id"], s["name"]) for s in suppliers
+            ]
+        finally:
+            conn.close()
+        if form.validate_on_submit():
+            try:
+                items = _parse_purchase_items()
+            except ValueError as exc:
+                flash(str(exc), "error")
+                return render_template(
+                    "purchases/purchase_form.html", tenant=slug, form=form,
+                    products=products, suppliers=suppliers)
+            conn = _db(slug)
+            try:
+                outlet = get_default_outlet(conn)
+                try:
+                    purchase_id = create_purchase(
+                        conn, outlet["id"], current_user.row_id, items,
+                        supplier_id=(form.supplier_id.data or None),
+                        notes=form.notes.data,
+                    )
+                except (ValueError, sqlite3.IntegrityError) as exc:
+                    flash(str(exc), "error")
+                    return render_template(
+                        "purchases/purchase_form.html", tenant=slug,
+                        form=form, products=products, suppliers=suppliers)
+            finally:
+                conn.close()
+            flash("Pembelian tersimpan dan stok bertambah.", "success")
+            return redirect(url_for("purchase_detail",
+                                    purchase_id=purchase_id))
+        if request.method == "POST":
+            for field_errors in form.errors.values():
+                for err in field_errors:
+                    flash(err, "error")
+        return render_template(
+            "purchases/purchase_form.html", tenant=slug, form=form,
+            products=products, suppliers=suppliers)
+
+    @app.get("/purchases/<int:purchase_id>")
+    @login_required
+    def purchase_detail(purchase_id):
+        slug = session["tenant"]
+        conn = _db(slug)
+        try:
+            data = get_purchase(conn, purchase_id)
+        finally:
+            conn.close()
+        if data is None:
+            abort(404)
+        return render_template(
+            "purchases/purchase_detail.html", tenant=slug, **data,
+            void_form=VoidForm(),
+            can_cancel=current_user.role in ("owner", "admin"),
+        )
+
+    @app.post("/purchases/<int:purchase_id>/cancel")
+    @require_role("owner", "admin")
+    def purchase_cancel(purchase_id):
+        slug = session["tenant"]
+        form = VoidForm()
+        if not form.validate_on_submit():
+            for field_errors in form.errors.values():
+                for err in field_errors:
+                    flash(err, "error")
+            return redirect(url_for("purchase_detail",
+                                    purchase_id=purchase_id))
+        conn = _db(slug)
+        try:
+            if get_purchase(conn, purchase_id) is None:
+                abort(404)
+            try:
+                cancel_purchase(conn, purchase_id, current_user.row_id,
+                                form.reason.data)
+            except (ValueError, sqlite3.IntegrityError) as exc:
+                flash(str(exc), "error")
+            else:
+                flash("Pembelian dibatalkan dan stok dikembalikan.",
+                      "success")
+        finally:
+            conn.close()
+        return redirect(url_for("purchase_detail",
+                                purchase_id=purchase_id))
 
     @app.post("/sales/<int:sale_id>/confirm-payment")
     @require_role("owner", "admin")

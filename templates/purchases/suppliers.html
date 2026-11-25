@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Pemasok — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Pemasok</h1>
+<p><a href="/purchases">Pembelian</a> | <a href="/suppliers/new">Tambah pemasok</a></p>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul>
+  {% for category, message in messages %}
+  <li><strong>{{ category }}:</strong> {{ message }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+<form method="get" action="/suppliers">
+  <input type="search" name="q" value="{{ q }}" placeholder="Cari nama/telepon/alamat">
+  <label><input type="checkbox" name="tampilkan_nonaktif" value="1" {% if include_inactive %}checked{% endif %}> Tampilkan nonaktif</label>
+  <button type="submit">Cari</button>
+</form>
+{% if suppliers %}
+<table>
+  <tr><th>Nama</th><th>Telepon</th><th>Alamat</th><th>Catatan</th><th>Status</th><th></th></tr>
+  {% for s in suppliers %}
+  <tr>
+    <td>{{ s.name }}</td>
+    <td>{{ s.phone or '-' }}</td>
+    <td>{{ s.address or '-' }}</td>
+    <td>{{ s.notes or '-' }}</td>
+    <td>{{ 'Aktif' if s.is_active else 'Nonaktif' }}</td>
+    <td>
+      <a href="/suppliers/{{ s.id }}/edit">Edit</a>
+      {% if s.is_active %}
+      <form method="post" action="/suppliers/{{ s.id }}/archive" style="display:inline">
+        {{ confirm_form.hidden_tag() }}
+        <button type="submit">Arsipkan</button>
+      </form>
+      {% else %}
+      <form method="post" action="/suppliers/{{ s.id }}/activate" style="display:inline">
+        {{ confirm_form.hidden_tag() }}
+        <button type="submit">Aktifkan</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>Belum ada pemasok.</p>
+{% endif %}
+{% endblock %}

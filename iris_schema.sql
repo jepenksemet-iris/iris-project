@@ -1,7 +1,7 @@
--- POS IRIS — skema database tenant, versi 4
+-- POS IRIS — skema database tenant, versi 5
 -- Berlaku per tenant: satu file iris.db di tenants/<slug>/iris.db
 -- Dibuat/idempotent oleh iris_db.init_tenant_db() (CREATE TABLE IF NOT EXISTS).
--- Versi skema dicatat di PRAGMA user_version = 4.
+-- Versi skema dicatat di PRAGMA user_version = 5.
 -- v2 (2026-11-25): stock_movements.kind ditambah 'opening_balance',
 -- 'adjustment_in', 'adjustment_out'; kolom effective_date (tanggal
 -- efektif mutasi, mis. saldo awal) ditambah.
@@ -11,8 +11,13 @@
 -- void_reason/voided_by/voided_at, dan status 'pending' (pembayaran
 -- non-tunai yang belum terverifikasi).
 -- v4 (2026-11-25): stock_movements.kind ditambah 'sale_void' (mutasi
--- pembalik pembatalan penjualan). Database lama dimigrasi oleh
--- iris_db.migrate_tenant_db() (lihat iris_db.py).
+-- pembalik pembatalan penjualan).
+-- v5 (2026-11-25): modul pembelian — suppliers ditambah notes/is_active/
+-- updated_at; purchases ditambah notes + kolom pembatalan
+-- (cancel_reason/cancelled_by/cancelled_at); purchase_items ditambah
+-- snapshot product_name/sku/unit; stock_movements.kind ditambah
+-- 'purchase_void' (mutasi pembalik pembatalan pembelian). Database
+-- lama dimigrasi oleh iris_db.migrate_tenant_db() (lihat iris_db.py).
 -- Semua uang disimpan sebagai INTEGER (satuan rupiah terkecil) agar
 -- tidak ada kesalahan pembulatan float. Jumlah/stok memakai REAL
 -- hanya untuk barang yang dijual per berat/volume; stok dihitung
@@ -92,7 +97,10 @@ CREATE TABLE IF NOT EXISTS suppliers (
     name TEXT NOT NULL,
     phone TEXT NOT NULL DEFAULT '',
     address TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    notes TEXT NOT NULL DEFAULT '',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Penjualan: total dihitung dari sale_items (sumber kebenaran),
@@ -154,6 +162,11 @@ CREATE TABLE IF NOT EXISTS sale_payments (
     created_by INTEGER REFERENCES users (id) ON DELETE SET NULL
 );
 
+-- Pembelian Tahap 6: transaksi dibuat langsung berstatus 'received'
+-- (barang diterima dan stok bertambah saat disimpan, atomik).
+-- Status 'ordered' (pesanan/PO draft) belum diimplementasikan.
+-- Pembatalan memakai status 'cancelled' + jejak cancel_*; stok
+-- dikembalikan lewat mutasi 'purchase_void' (lihat iris_db.cancel_purchase).
 CREATE TABLE IF NOT EXISTS purchases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     outlet_id INTEGER NOT NULL REFERENCES outlets (id),
@@ -163,13 +176,22 @@ CREATE TABLE IF NOT EXISTS purchases (
     status TEXT NOT NULL DEFAULT 'received'
         CHECK (status IN ('ordered', 'received', 'returned', 'cancelled')),
     total INTEGER NOT NULL DEFAULT 0 CHECK (total >= 0),
+    notes TEXT NOT NULL DEFAULT '',
+    cancel_reason TEXT,
+    cancelled_by INTEGER REFERENCES users (id) ON DELETE SET NULL,
+    cancelled_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Snapshot nama/SKU/satuan saat pembelian agar detail lama tetap benar
+-- walau master produk diedit.
 CREATE TABLE IF NOT EXISTS purchase_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     purchase_id INTEGER NOT NULL REFERENCES purchases (id) ON DELETE CASCADE,
     product_id INTEGER NOT NULL REFERENCES products (id),
+    product_name TEXT NOT NULL DEFAULT '',
+    sku TEXT,
+    unit TEXT,
     qty REAL NOT NULL CHECK (qty > 0),
     price INTEGER NOT NULL CHECK (price >= 0) -- harga beli satuan saat transaksi
 );
@@ -186,7 +208,7 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     kind TEXT NOT NULL
         CHECK (kind IN ('sale', 'purchase', 'adjustment', 'return', 'transfer',
                         'opening_balance', 'adjustment_in', 'adjustment_out',
-                        'sale_void')),
+                        'sale_void', 'purchase_void')),
     ref_type TEXT NOT NULL DEFAULT '',
     ref_id INTEGER,
     note TEXT NOT NULL DEFAULT '',
@@ -214,4 +236,7 @@ CREATE INDEX IF NOT EXISTS idx_sales_user ON sales (user_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items (sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_product ON sale_items (product_id);
 CREATE INDEX IF NOT EXISTS idx_sale_payments_sale ON sale_payments (sale_id);
+CREATE INDEX IF NOT EXISTS idx_purchases_created ON purchases (created_at);
+CREATE INDEX IF NOT EXISTS idx_purchases_supplier ON purchases (supplier_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchase_items (purchase_id);
 CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements (product_id, created_at);
