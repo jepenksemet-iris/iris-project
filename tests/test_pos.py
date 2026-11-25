@@ -70,7 +70,7 @@ def test_cashier_page_opens(tmp_path, monkeypatch):
     resp = client.get("/pos")
     assert resp.status_code == 200
     assert b"Kasir" in resp.data
-    assert b"Proses pembayaran (Tahap 3)" in resp.data
+    assert b"Proses pembayaran" in resp.data
 
 
 def test_search_by_name_sku_barcode(tmp_path, monkeypatch):

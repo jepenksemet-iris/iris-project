@@ -1,11 +1,10 @@
-"""Tenant app — POS IRIS (tahap 8: P1 tahap 2 kasir + keranjang, skema v2).
+"""Tenant app — POS IRIS (tahap 9: P1 tahap 3 checkout + riwayat, skema v3).
 
 Aplikasi operasional milik tenant. Modul produk & stok sudah ada:
 tambah/edit/arsip produk, penyesuaian stok atomik dengan ledger
-mutasi (stock_movements). Modul kasir tahap 2 (halaman kasir +
-keranjang, tanpa posting transaksi) sudah ada. Pembayaran,
-penyimpanan penjualan, struk, dan pembatalan masih belum
-diimplementasikan (lihat docs/MODULES.md).
+mutasi (stock_movements). Modul kasir: halaman + keranjang (tahap 2)
+dan checkout atomik + riwayat/detail/struk (tahap 3). Pembatalan
+masih belum diimplementasikan (lihat docs/MODULES.md).
 
 Jalan di port 5001. Identitas tenant berasal dari LOGIN (disimpan di
 session), bukan lagi dari query ``?tenant=``.
@@ -21,6 +20,7 @@ atau:
 """
 import os
 import sqlite3
+import uuid
 
 import click
 from flask import (
@@ -41,6 +41,7 @@ from forms import (
     CartAddForm,
     CartRemoveForm,
     CartSetForm,
+    CheckoutForm,
     ConfirmForm,
     LoginForm,
     ProductForm,
@@ -49,9 +50,12 @@ from forms import (
 from iris_auth import TenantUser, require_role, setup_auth
 from iris_db import (
     adjust_stock,
+    confirm_payment,
     create_product,
+    create_sale,
     create_user,
     get_default_outlet,
+    get_sale,
     get_or_create_category,
     get_or_create_unit,
     get_product,
@@ -62,6 +66,7 @@ from iris_db import (
     list_categories,
     list_outlets,
     list_products,
+    list_sales,
     list_stock_movements,
     record_opening_balance,
     search_products,
@@ -380,6 +385,8 @@ def create_app(config_class=None):
                 conn, items, outlet["id"])
         finally:
             conn.close()
+        checkout_form = CheckoutForm()
+        checkout_form.idempotency_key.data = uuid.uuid4().hex
         return render_template(
             "pos/cashier.html",
             tenant=slug,
@@ -393,7 +400,139 @@ def create_app(config_class=None):
             set_form=CartSetForm(),
             remove_form=CartRemoveForm(),
             clear_form=ConfirmForm(),
+            checkout_form=checkout_form,
         )
+
+    @app.post("/pos/checkout")
+    @login_required
+    def pos_checkout():
+        slug = session["tenant"]
+        form = CheckoutForm()
+        if not form.validate_on_submit():
+            for field_errors in form.errors.values():
+                for err in field_errors:
+                    flash(err, "error")
+            return redirect(url_for("pos"))
+        conn = _db(slug)
+        try:
+            items = _get_cart(slug)
+            if not items:
+                # Keranjang sudah dikosongkan setelah checkout berhasil:
+                # pengiriman ulang form yang sama (token sama) tetap
+                # mengembalikan transaksi yang sudah terbentuk.
+                existing = conn.execute(
+                    "SELECT id FROM sales WHERE idempotency_key = ?",
+                    (form.idempotency_key.data.strip(),),
+                ).fetchone()
+                if existing is not None:
+                    flash("Transaksi sudah pernah diproses.", "success")
+                    return redirect(url_for(
+                        "sale_detail", sale_id=existing["id"]))
+                flash("Keranjang kosong.", "error")
+                return redirect(url_for("pos"))
+            outlet = get_default_outlet(conn)
+            try:
+                sale_id, replayed = create_sale(
+                    conn,
+                    outlet["id"],
+                    current_user.row_id,
+                    items,
+                    form.payment_method.data,
+                    amount_tendered=form.amount_tendered.data,
+                    payment_ref=form.payment_ref.data,
+                    idempotency_key=form.idempotency_key.data.strip(),
+                )
+            except (ValueError, sqlite3.IntegrityError) as exc:
+                flash(str(exc), "error")
+                return redirect(url_for("pos"))
+            _save_cart(slug, [])
+            data = get_sale(conn, sale_id)
+        finally:
+            conn.close()
+        invoice = data["sale"]["invoice_no"]
+        if replayed:
+            flash(f"Transaksi sudah pernah diproses: {invoice}.", "success")
+        elif data["sale"]["status"] == "pending":
+            flash(
+                f"Transaksi {invoice} tersimpan (pending) — pembayaran"
+                " non-tunai dicatat manual dan menunggu konfirmasi"
+                " owner/admin.", "success")
+        else:
+            flash(
+                f"Transaksi {invoice} berhasil."
+                f" Kembalian: Rp {data['sale']['change_amount']}.", "success")
+        return redirect(url_for("sale_detail", sale_id=sale_id))
+
+    @app.get("/sales")
+    @login_required
+    def sales_list():
+        slug = session["tenant"]
+        q = (request.args.get("q") or "").strip()
+        date_from = request.args.get("dari") or ""
+        date_to = request.args.get("sampai") or ""
+        status = request.args.get("status") or ""
+        conn = _db(slug)
+        try:
+            rows = list_sales(
+                conn, q=q or None,
+                date_from=date_from or None, date_to=date_to or None,
+                status=status or None,
+            )
+        finally:
+            conn.close()
+        return render_template(
+            "pos/sales_list.html", tenant=slug, sales=rows, q=q,
+            date_from=date_from, date_to=date_to, status=status,
+        )
+
+    @app.get("/sales/<int:sale_id>")
+    @login_required
+    def sale_detail(sale_id):
+        slug = session["tenant"]
+        conn = _db(slug)
+        try:
+            data = get_sale(conn, sale_id)
+        finally:
+            conn.close()
+        if data is None:
+            abort(404)
+        return render_template(
+            "pos/sale_detail.html", tenant=slug, **data,
+            confirm_form=ConfirmForm(),
+        )
+
+    @app.get("/sales/<int:sale_id>/receipt")
+    @login_required
+    def sale_receipt(sale_id):
+        slug = session["tenant"]
+        conn = _db(slug)
+        try:
+            data = get_sale(conn, sale_id)
+        finally:
+            conn.close()
+        if data is None:
+            abort(404)
+        return render_template("pos/receipt.html", tenant=slug, **data)
+
+    @app.post("/sales/<int:sale_id>/confirm-payment")
+    @require_role("owner", "admin")
+    def sale_confirm_payment(sale_id):
+        slug = session["tenant"]
+        form = ConfirmForm()
+        if not form.validate_on_submit():
+            flash("Token tidak valid.", "error")
+            return redirect(url_for("sale_detail", sale_id=sale_id))
+        conn = _db(slug)
+        try:
+            try:
+                confirm_payment(conn, sale_id, current_user.row_id)
+            except ValueError as exc:
+                flash(str(exc), "error")
+            else:
+                flash("Pembayaran dikonfirmasi.", "success")
+        finally:
+            conn.close()
+        return redirect(url_for("sale_detail", sale_id=sale_id))
 
     def _apply_cart_change(slug, form, change):
         """Validasi perubahan keranjang terhadap database, lalu simpan

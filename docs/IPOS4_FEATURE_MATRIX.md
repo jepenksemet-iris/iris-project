@@ -51,8 +51,8 @@
 | Kapabilitas benchmark | Status IRIS | Bukti | Gap / Rekomendasi |
 |---|---|---|---|
 | Pesanan Penjualan / Sales Order | Belum Ada | Tidak ada tabel sales order | P1 — setelah kasir dasar jalan |
-| Daftar / Input Penjualan (back-office) | Belum Ada | Tabel `sales, sale_items` ada; tanpa route/template/logika | P0 — faktur back-office setelah kasir, atau bersamaan dengan pola form yang sama |
-| Penjualan Kasir (POS) | Parsial | **P1 Tahap 2 (2026-11-25):** halaman kasir `/pos` + keranjang di session + kalkulasi server (cari nama/SKU/barcode, tambah/gabung, ubah/hapus, validasi stok & harga, kasir boleh pakai, CSRF; `tests/test_pos.py`, 13 tes). Tombol bayar belum aktif | P1 — Tahap 3 pembayaran + posting atomik, Tahap 4 ledger, Tahap 5 histori/struk/pembatalan |
+| Daftar / Input Penjualan (back-office) | Parsial | **P1 Tahap 3:** riwayat penjualan `/sales` + detail + struk sudah ada dan teruji; penyimpanan lewat kasir, bukan form back-office terpisah | P1 — form input penjualan back-office bila dibutuhkan |
+| Penjualan Kasir (POS) | Sudah Ada dan Teruji | **P1 Tahap 2–3 (2026-11-25):** halaman kasir `/pos` + keranjang + checkout atomik (tunai + non-tunai manual, invoice unik, idempotensi, stok berkurang lewat ledger; `tests/test_pos.py` + `tests/test_checkout.py`, 27 tes). Tanpa diskon/pajak di P1 dasar; kuantitas checkout harus bulat | P1 — Tahap 5 pembatalan; retur sebagian terpisah |
 | History Harga Jual | Belum Ada | Dapat diturunkan dari `sale_items` setelah penjualan ada | P1 |
 | Pembayaran Piutang, Status Lunas BG/Cek | Belum Ada | Tidak ada tabel piutang/pembayaran | P0 (piutang) — piutang = sisa nilai penjualan kredit |
 | Retur Penjualan | Belum Ada | Tanpa tabel/route | P0 — retur membalikkan stok + piutang sesuai aturan |

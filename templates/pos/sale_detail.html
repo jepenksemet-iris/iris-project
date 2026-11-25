@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Transaksi {{ sale.invoice_no }} — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Transaksi {{ sale.invoice_no }}</h1>
+<p><a href="/sales">Kembali ke riwayat</a> | <a href="/sales/{{ sale.id }}/receipt">Lihat struk</a></p>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul>
+  {% for category, message in messages %}
+  <li><strong>{{ category }}:</strong> {{ message }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+<ul>
+  <li>Tanggal: {{ sale.created_at }}</li>
+  <li>Kasir: {{ sale.cashier_name or '-' }}</li>
+  <li>Outlet: {{ sale.outlet_name or '-' }}</li>
+  <li>Status: {{ sale.status }}{% if sale.status == 'pending' %} — pembayaran non-tunai dicatat manual, menunggu konfirmasi owner/admin{% endif %}</li>
+  <li>Metode: {{ sale.payment_method }}{% if sale.payment_ref %} (ref: {{ sale.payment_ref }}){% endif %}</li>
+</ul>
+<table>
+  <tr><th>Produk</th><th>SKU</th><th>Satuan</th><th>Kuantitas</th><th>Harga</th><th>Subtotal</th></tr>
+  {% for item in items %}
+  <tr>
+    <td>{{ item.product_name }}</td>
+    <td>{{ item.sku or '-' }}</td>
+    <td>{{ item.unit or '-' }}</td>
+    <td>{{ item.qty }}</td>
+    <td>Rp {{ item.price }}</td>
+    <td>Rp {{ (item.price * item.qty)|int }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p>Subtotal: Rp {{ sale.subtotal }}</p>
+<p>Total: Rp {{ sale.total }}</p>
+<p>Dibayar: Rp {{ sale.paid }}</p>
+<p>Kembalian: Rp {{ sale.change_amount }}</p>
+<h2>Pembayaran tercatat</h2>
+<table>
+  <tr><th>Metode</th><th>Nominal diterima</th><th>Referensi</th><th>Waktu</th></tr>
+  {% for p in payments %}
+  <tr>
+    <td>{{ p.payment_method }}</td>
+    <td>Rp {{ p.amount }}</td>
+    <td>{{ p.reference_number or '-' }}</td>
+    <td>{{ p.paid_at }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% if sale.status == 'pending' %}
+<form method="post" action="/sales/{{ sale.id }}/confirm-payment">
+  {{ confirm_form.hidden_tag() }}
+  <p>Pembayaran non-tunai ini belum terverifikasi. Hanya owner/admin yang dapat mengonfirmasi.</p>
+  <button type="submit">Konfirmasi pembayaran</button>
+</form>
+{% endif %}
+{% endblock %}

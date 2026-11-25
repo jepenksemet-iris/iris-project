@@ -14,6 +14,17 @@ tenants/
 
 Akses database tenant dilakukan melalui `get_tenant_db(slug)` di `iris_db.py`, dan skema diterapkan oleh `init_tenant_db(slug)` dari `iris_schema.sql`.
 
+## Skema v3 (P1 Tahap 3, 2026-11-25)
+
+Versi skema dicatat di `PRAGMA user_version = 3`. Database lama dimigrasi otomatis oleh `iris_db.migrate_tenant_db()` (rantai v1→v2→v3 atau v2→v3).
+
+Perubahan v3 (penjualan kasir):
+- `sale_items`: kolom snapshot baru `product_name`, `sku`, `unit` (ALTER TABLE, data lama tetap).
+- `sales`: dibuat ulang dalam satu transaksi — status CHECK ditambah `'pending'` (pembayaran non-tunai dicatat manual tapi belum terverifikasi); kolom baru `change_amount`, `payment_ref`, `idempotency_key UNIQUE`, `idempotency_payload`, `void_reason`, `voided_by`, `voided_at`. Data penjualan lama disalin utuh.
+- Tabel baru `sale_payments` (satu baris per pembayaran yang dicatat kasir; non-tunai = dicatat manual, **bukan** terverifikasi gateway).
+- Index baru: `sales(created_at)`, `sales(user_id)`, `sale_items(product_id)`, `sale_payments(sale_id)`.
+- Arti kolom pembayaran: `sales.paid` = jumlah yang diterapkan ke penjualan (tunai = total; non-tunai pending = 0 sampai dikonfirmasi); `sale_payments.amount` = nominal yang diterima (tunai bisa lebih dari total; kembaliannya di `sales.change_amount`).
+
 ## Skema v2 (tahap 7 / Paket B, 2026-11-25)
 
 Versi skema dicatat di `PRAGMA user_version = 2`. Database v1 dimigrasi otomatis oleh `iris_db.migrate_tenant_db()` saat `init_tenant_db()` dijalankan — CHECK constraint SQLite tidak bisa diubah dengan ALTER, jadi tabel `stock_movements` dibuat ulang (tabel baru → salin data → hapus lama → ganti nama) dalam satu transaksi.

@@ -95,8 +95,15 @@
     <p>Keranjang masih kosong.</p>
     {% endif %}
     <hr>
-    <p class="pos-checkout-note">Pembayaran dan penyimpanan transaksi masuk Tahap 3 — tombol proses pembayaran belum aktif pada tahap ini.</p>
-    <button type="button" disabled>Proses pembayaran (Tahap 3)</button>
+    <h3>Pembayaran</h3>
+    <form method="post" action="{{ url_for('pos_checkout') }}" onsubmit="this.querySelector('button[type=submit]').disabled = true; this.querySelector('button[type=submit]').textContent = 'Memproses…';">
+      {{ checkout_form.hidden_tag() }}
+      <p>{{ checkout_form.payment_method.label }}<br>{{ checkout_form.payment_method() }}</p>
+      <p>{{ checkout_form.amount_tendered.label }}<br>{{ checkout_form.amount_tendered() }}{% for e in checkout_form.amount_tendered.errors %} <span>{{ e }}</span>{% endfor %}<br><small>Untuk tunai: isi uang diterima (kembalian dihitung server). Untuk non-tunai: kosongkan — nominal = total, dicatat manual dan menunggu konfirmasi.</small></p>
+      <p>{{ checkout_form.payment_ref.label }}<br>{{ checkout_form.payment_ref(size=32) }}</p>
+      <p><button type="submit">Proses pembayaran</button></p>
+    </form>
+    <p><a href="/sales">Riwayat penjualan</a></p>
   </section>
 </div>
 {% endblock %}

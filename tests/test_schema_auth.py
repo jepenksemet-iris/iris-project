@@ -27,7 +27,7 @@ EXPECTED_TABLES = {
 def test_schema_v1_tables(tmp_path):
     conn = init_tenant_db("toko-demo", data_dir=str(tmp_path))
     try:
-        assert get_schema_version(conn) == SCHEMA_VERSION == 2
+        assert get_schema_version(conn) == SCHEMA_VERSION == 3
         tables = {
             r[0] for r in conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'"

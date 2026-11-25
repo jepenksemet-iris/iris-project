@@ -4,6 +4,7 @@ from flask_wtf import FlaskForm
 from wtforms import (
     DateField,
     FloatField,
+    HiddenField,
     IntegerField,
     PasswordField,
     SelectField,
@@ -97,6 +98,29 @@ class CartSetForm(FlaskForm):
 class CartRemoveForm(FlaskForm):
     product_id = IntegerField("Produk", validators=[DataRequired()])
     submit = SubmitField("Hapus")
+
+
+class CheckoutForm(FlaskForm):
+    payment_method = SelectField(
+        "Metode pembayaran",
+        choices=[
+            ("cash", "Tunai"),
+            ("transfer", "Transfer bank (dicatat manual)"),
+            ("qris", "QRIS (dicatat manual)"),
+            ("debit", "Debit (dicatat manual)"),
+        ],
+        validators=[DataRequired()],
+    )
+    amount_tendered = IntegerField(
+        "Uang diterima (Rp, tunai)",
+        validators=[Optional(), NumberRange(min=0)],
+    )
+    payment_ref = StringField(
+        "Referensi pembayaran (opsional, non-tunai)",
+        validators=[Optional(), Length(max=100)],
+    )
+    idempotency_key = HiddenField("Token checkout", validators=[DataRequired()])
+    submit = SubmitField("Proses pembayaran")
 
 
 class ConfirmForm(FlaskForm):

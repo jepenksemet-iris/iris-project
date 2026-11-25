@@ -88,9 +88,11 @@ def _build_v1_db(tmp_path):
 
 
 def test_fresh_db_is_v2(tmp_path):
+    # Skema terbaru kini v3; DB baru langsung v3 (migrasi v1->v2 tetap
+    # diuji lewat test_migrate_v1_to_v2 di bawah, yang berantai ke v3).
     conn = init_tenant_db("toko-demo", data_dir=str(tmp_path))
     try:
-        assert get_schema_version(conn) == SCHEMA_VERSION == 2
+        assert get_schema_version(conn) == SCHEMA_VERSION == 3
         kinds = conn.execute(
             "SELECT sql FROM sqlite_master WHERE name = 'stock_movements'"
         ).fetchone()[0]
@@ -103,7 +105,8 @@ def test_migrate_v1_to_v2(tmp_path):
     _build_v1_db(tmp_path)
     conn = init_tenant_db("toko-demo", data_dir=str(tmp_path))
     try:
-        assert get_schema_version(conn) == 2
+        # Rantai migrasi kini berakhir di v3.
+        assert get_schema_version(conn) == 3
         # Data stok utuh, jenis mutasi dipetakan.
         assert conn.execute(
             "SELECT qty FROM stock WHERE product_id = 1 AND outlet_id = 1"

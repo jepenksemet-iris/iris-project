@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Riwayat Penjualan — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Riwayat Penjualan</h1>
+<p><a href="/pos">Kembali ke kasir</a></p>
+<form method="get" action="/sales">
+  <label>Cari invoice: <input type="search" name="q" value="{{ q }}"></label>
+  <label>Dari: <input type="date" name="dari" value="{{ date_from }}"></label>
+  <label>Sampai: <input type="date" name="sampai" value="{{ date_to }}"></label>
+  <label>Status:
+    <select name="status">
+      <option value="">Semua</option>
+      {% for s in ["completed", "pending", "void", "returned"] %}
+      <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">Filter</button>
+</form>
+{% if sales %}
+<table>
+  <tr><th>Invoice</th><th>Tanggal</th><th>Kasir</th><th>Item</th><th>Total</th><th>Metode</th><th>Status</th><th></th></tr>
+  {% for s in sales %}
+  <tr>
+    <td>{{ s.invoice_no }}</td>
+    <td>{{ s.created_at }}</td>
+    <td>{{ s.cashier_name or '-' }}</td>
+    <td>{{ s.item_count }}</td>
+    <td>Rp {{ s.total }}</td>
+    <td>{{ s.payment_method }}</td>
+    <td>{{ s.status }}{% if s.status == 'pending' %} (menunggu konfirmasi){% endif %}</td>
+    <td><a href="/sales/{{ s.id }}">Detail</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>Belum ada transaksi penjualan.</p>
+{% endif %}
+{% endblock %}
