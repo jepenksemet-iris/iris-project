@@ -3,14 +3,65 @@
 {% block content %}
 <h1>Produk — {{ tenant }}</h1>
 <p><a href="/">Kembali ke dashboard</a></p>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul>
+  {% for category, message in messages %}
+  <li><strong>{{ category }}:</strong> {{ message }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+<form method="get" action="/products">
+  <label>Cari SKU/nama: <input type="search" name="q" value="{{ q }}"></label>
+  <label>Kategori:
+    <select name="kategori">
+      <option value="">Semua kategori</option>
+      {% for c in categories %}
+      <option value="{{ c.id }}" {% if category_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label><input type="checkbox" name="tampilkan_nonaktif" value="1" {% if include_inactive %}checked{% endif %}> Tampilkan nonaktif</label>
+  <button type="submit">Cari</button>
+</form>
+{% if can_manage %}
+<p><a href="/products/new">+ Tambah Produk</a></p>
+{% endif %}
 {% if products %}
 <table>
-  <tr><th>SKU</th><th>Nama</th><th>Kategori</th><th>Harga jual</th></tr>
+  <tr><th>SKU</th><th>Nama</th><th>Kategori</th><th>Satuan</th><th>Harga beli</th><th>Harga jual</th><th>Stok total</th><th>Status</th><th>Aksi</th></tr>
   {% for p in products %}
-  <tr><td>{{ p.sku }}</td><td>{{ p.name }}</td><td>{{ p.category or '-' }}</td><td>{{ p.sell_price }}</td></tr>
+  <tr>
+    <td>{{ p.sku }}</td>
+    <td>{{ p.name }}</td>
+    <td>{{ p.category or '-' }}</td>
+    <td>{{ p.unit or '-' }}</td>
+    <td>{{ p.buy_price }}</td>
+    <td>{{ p.sell_price }}</td>
+    <td>{{ p.stock_qty }}{% if p.stock_qty <= 0 %} (Habis){% elif p.stock_qty <= p.min_stock %} (Rendah){% endif %}</td>
+    <td>{% if p.is_active %}Aktif{% else %}Nonaktif{% endif %}</td>
+    <td>
+      {% if can_manage %}
+      <a href="/products/{{ p.id }}/edit">Edit</a>
+      <a href="/products/{{ p.id }}/stock">Stok</a>
+      {% if p.is_active %}
+      <form method="post" action="/products/{{ p.id }}/archive" style="display:inline">
+        {{ confirm_form.hidden_tag() }}
+        <button type="submit" onclick="return confirm('Arsipkan produk ini? Data historis tetap tersimpan.')">Arsipkan</button>
+      </form>
+      {% else %}
+      <form method="post" action="/products/{{ p.id }}/activate" style="display:inline">
+        {{ confirm_form.hidden_tag() }}
+        <button type="submit">Aktifkan</button>
+      </form>
+      {% endif %}
+      {% endif %}
+    </td>
+  </tr>
   {% endfor %}
 </table>
 {% else %}
-<p>Belum ada produk.</p>
+<p>Belum ada produk.{% if can_manage %} <a href="/products/new">Tambah produk pertama</a>.{% endif %}</p>
 {% endif %}
 {% endblock %}

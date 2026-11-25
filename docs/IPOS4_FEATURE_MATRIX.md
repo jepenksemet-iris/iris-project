@@ -2,7 +2,7 @@
 
 > **Sumber benchmark:** dokumen "Riset Menu, Fitur, dan UX iPOS 4 untuk Pengembangan POS IRIS" — rekonstruksi fitur iPOS 4 dari panduan/manual dan sumber publik (Scribd, ipos4mobile.com, tokoipos.com, dll). Bukan spesifikasi resmi lengkap; ketersediaan fitur iPOS 4 dapat berbeda menurut edisi/build. Jangan mengklaim IRIS sudah memiliki fitur hanya karena tercantum di sini.
 >
-> **Audit IRIS:** repository `jepenksemet-iris/iris-project`, head commit `71ef6ec0` (tahap 4: landing page), diaudit read-only 2026-11-25. Status "Sudah Ada" hanya diberikan bila ada bukti route + template/backend + tes — bukan karena nama tabel atau nama menu ditemukan.
+> **Audit IRIS:** repository `jepenksemet-iris/iris-project`, head commit `71ef6ec0` (tahap 4: landing page), diaudit read-only 2026-11-25; baris terkait produk & stok diperbarui setelah tahap 6 (2026-11-25). Status "Sudah Ada" hanya diberikan bila ada bukti route + template/backend + tes — bukan karena nama tabel atau nama menu ditemukan.
 >
 > **Status yang dipakai:** `Sudah Ada dan Teruji` · `Parsial` · `Belum Ada` · `Perlu Keputusan Produk` · `Tidak Relevan`
 
@@ -24,8 +24,8 @@
 
 | Kapabilitas benchmark (iPOS 4) | Status IRIS | Bukti implementasi | Gap / Rekomendasi |
 |---|---|---|---|
-| Data Item: tambah, daftar, edit, hapus | Parsial | Tabel `products, categories, units` ada di `iris_schema.sql`; `GET /products` (`tenant_app.py`, `templates/tenant/products.html`) hanya daftar baca saja, maks 100; tes `test_schema_auth.py::test_schema_v1_tables` | Tambah/edit/arsip produk belum ada. Prioritas P0 — modul pertama yang dibangun (lihat §22 dokumen benchmark) |
-| Kartu Stok per item | Belum Ada | Tabel `stock_movements` ada, tanpa route/template | Butuh ledger mutasi dulu (P0) |
+| Data Item: tambah, daftar, edit, hapus | Parsial | **Tahap 6–7 (2026-11-25):** tambah/edit/arsip produk sudah ada dan teruji (`tenant_app.py`: `/products/new`, `/edit`, `/archive|activate`; `iris_db.py`: `create/update/set_product_active`). Daftar bisa dicari (SKU/nama) + filter kategori + filter nonaktif + indikator Habis/Rendah. Satuan dasar wajib (tahap 7); ganti satuan ditolak bila ada stok/mutasi | Hapus permanen sengaja tidak ada (arsip saja, demi histori). Barcode cetak, multi satuan/harga, serial masih Belum Ada |
+| Kartu Stok per item | Sudah Ada dan Teruji | **Tahap 6:** riwayat mutasi per produk di halaman stok (`/products/<id>/stock`, `list_stock_movements()`), teruji di `test_stock_adjustment_and_movements` | — |
 | Barcode: pengaturan kode, cetak label | Belum Ada | Kolom `barcode TEXT UNIQUE` sudah ada di `products` (`iris_schema.sql`); tanpa route/template/cetak | Perlu Keputusan Produk: apakah cetak label wajib di tahap awal, atau cukup SKU + scan? |
 | Diskon Periode | Belum Ada | Tidak ada tabel/kolom diskon | P1/P2, setelah harga dasar stabil |
 | Multi satuan / konversi satuan | Belum Ada | Tabel `units` ada; tidak ada tabel konversi atau logika konversi | P1 — tabel konversi + validasi server |
@@ -68,13 +68,13 @@
 
 | Kapabilitas benchmark | Status IRIS | Bukti | Gap / Rekomendasi |
 |---|---|---|---|
-| Ringkasan stok per outlet | Parsial | Tabel `stock` (per produk×outlet) ada; `GET /products` menampilkan daftar produk (baca saja) | Tampilkan kuantitas stok per outlet di daftar produk (P0, kecil) |
-| Item Masuk / Item Keluar | Belum Ada | Tabel `stock_movements` ada; tanpa route/template | P1 — masuk/keluar di luar pembelian/penjualan, selalu lewat mutasi |
+| Ringkasan stok per outlet | Sudah Ada dan Teruji | **Tahap 6:** daftar produk menampilkan stok total; halaman stok menampilkan jumlah per outlet (`get_stock_qty()`), teruji | Manajemen outlet mandiri masih Belum Ada (outlet default "Outlet Utama" dibuat otomatis) |
+| Item Masuk / Item Keluar | Sudah Ada dan Teruji | **Tahap 7:** penyesuaian masuk/keluar kini jenis mutasi sendiri (`adjustment_in`/`adjustment_out`, skema v2) dengan tanggal efektif + keterangan, teruji | — |
 | Stok Opname | Belum Ada | Tanpa route/template | P1 — simpan stok sistem, stok fisik, selisih, alasan, user, waktu |
-| Saldo Awal Item | Belum Ada | Tanpa route/template | P0/P1 — pengisian stok awal saat tenant baru; terkait tanggal/periode awal |
+| Saldo Awal Item | Sudah Ada dan Teruji | **Tahap 7:** saldo awal sebagai mutasi `opening_balance` (skema v2) dengan tanggal efektif; hanya sekali per produk×outlet, duplikat ditolak; koreksi lewat penyesuaian. Teruji (`test_opening_balance_only_once`, `test_migration_v2.py`) | — |
 | Transfer Stok antar gudang/outlet | Belum Ada | Tanpa route/template | P1 — satu transaksi DB: stok asal berkurang + tujuan bertambah + mutasi |
-| Daftar Stok Minimum | Parsial | Kolom `min_stock` sudah ada di `products` (`iris_schema.sql`); tanpa UI pengisian, daftar peringatan, atau pengecekan saat penjualan | P1 — UI ambang minimum + peringatan stok menipis di dashboard |
-| Mutasi Item / Kartu Stok | Belum Ada | Tabel `stock_movements` ada; tanpa tampilan | P0 — **satu ledger mutasi sebagai sumber kebenaran**; setiap penjualan/pembelian/retur/transfer/opname/masuk/keluar wajib menulis mutasi |
+| Daftar Stok Minimum | Parsial | Kolom `min_stock` sudah ada di `products` (`iris_schema.sql`); **Tahap 6:** dapat diisi lewat form produk (teruji) | P1 — daftar peringatan stok menipis di dashboard + pengecekan saat penjualan |
+| Mutasi Item / Kartu Stok | Sudah Ada dan Teruji | **Tahap 6–7:** `adjust_stock()` atomik (ubah `stock` + tulis `stock_movements` satu transaksi; stok negatif ditolak) + kartu stok dengan filter jenis/tanggal, kolom masuk/keluar + saldo berjalan; rekonsiliasi teruji (`reconcile_stock()`, `test_reconciliation_and_atomicity`) | Penjualan/pembelian/retur/transfer/opname belum ada — masing-masing wajib memakai `adjust_stock()`/mutasi saat dibangun |
 | Serial / riwayat serial | Belum Ada | Tanpa tabel | P3 / Tidak Relevan untuk target awal |
 
 ## 6. Akuntansi

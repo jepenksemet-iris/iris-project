@@ -1,7 +1,11 @@
--- POS IRIS — skema database tenant, versi 1
+-- POS IRIS — skema database tenant, versi 2
 -- Berlaku per tenant: satu file iris.db di tenants/<slug>/iris.db
 -- Dibuat/idempotent oleh iris_db.init_tenant_db() (CREATE TABLE IF NOT EXISTS).
--- Versi skema dicatat di PRAGMA user_version = 1.
+-- Versi skema dicatat di PRAGMA user_version = 2.
+-- v2 (2026-11-25): stock_movements.kind ditambah 'opening_balance',
+-- 'adjustment_in', 'adjustment_out'; kolom effective_date (tanggal
+-- efektif mutasi, mis. saldo awal) ditambah. Database v1 dimigrasi
+-- oleh iris_db.migrate_tenant_db() (lihat iris_db.py).
 -- Semua uang disimpan sebagai INTEGER (satuan rupiah terkecil) agar
 -- tidak ada kesalahan pembulatan float. Jumlah/stok memakai REAL
 -- hanya untuk barang yang dijual per berat/volume; stok dihitung
@@ -133,18 +137,22 @@ CREATE TABLE IF NOT EXISTS purchase_items (
 );
 
 -- Riwayat perubahan stok (sumber audit): sale, purchase, adjustment,
--- return, transfer. qty bisa negatif untuk pengurangan.
+-- return, transfer, opening_balance, adjustment_in, adjustment_out.
+-- qty positif = masuk, negatif = keluar. effective_date = tanggal
+-- efektif mutasi (mis. saldo awal); bila kosong, berlaku created_at.
 CREATE TABLE IF NOT EXISTS stock_movements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER NOT NULL REFERENCES products (id),
     outlet_id INTEGER NOT NULL REFERENCES outlets (id),
     qty REAL NOT NULL,
     kind TEXT NOT NULL
-        CHECK (kind IN ('sale', 'purchase', 'adjustment', 'return', 'transfer')),
+        CHECK (kind IN ('sale', 'purchase', 'adjustment', 'return', 'transfer',
+                        'opening_balance', 'adjustment_in', 'adjustment_out')),
     ref_type TEXT NOT NULL DEFAULT '',
     ref_id INTEGER,
     note TEXT NOT NULL DEFAULT '',
     user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,
+    effective_date TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

@@ -2,7 +2,7 @@
 
 Platform Point of Sale (POS) berbasis web untuk toko retail, usaha kecil, dan UMKM. Arah pengembangan IRIS adalah menjadi platform operasional bisnis modular berbasis SaaS, bukan hanya aplikasi kasir.
 
-> **Status:** Tahap 4 — landing page POS IRIS (2026-11-25). Landing kini punya header/nav, hero + mockup kasir, value strip, masalah, fitur, showcase, cara kerja, solusi, harga, keamanan, FAQ, dan final CTA, dengan CSS/JS sendiri dan tes landing. Pendaftaran mandiri **belum** ada — `/register` mengarahkan ke WhatsApp resmi 0822-3772-7330. Trial 14 hari **belum aktif**. Kuota/fitur per paket menyusul. Database tenant SQLite punya skema v1 (14 tabel) dan aplikasi tenant dilindungi login dengan role owner/admin/cashier. Modul operasional (kasir, produk, stok, pembelian, laporan, dst) **belum** diimplementasikan — yang ada baru daftar produk (baca saja). Daftar fitur di dokumen adalah peta ruang lingkup produk — **bukan** pernyataan bahwa semua fitur sudah selesai atau tersedia.
+> **Status:** Tahap 7 — tutup gap P0 produk & stok + migrasi skema v2 (2026-11-25). Tenant kini bisa tambah/edit/arsip produk (SKU, barcode, kategori, satuan dasar wajib, harga beli/jual, stok minimum opsional), filter kategori + indikator stok habis/rendah, catat saldo awal (`opening_balance`, sekali per produk×outlet, dengan tanggal efektif), penyesuaian masuk/keluar, dan melihat kartu stok dengan kolom masuk/keluar + saldo berjalan; saldo direkonsiliasi dengan ledger dan tidak bisa negatif. Database tenant SQLite kini skema v2 (14 tabel; migrasi otomatis dari v1). Landing page punya header/nav, hero + mockup kasir, value strip, masalah, fitur, showcase, cara kerja, solusi, harga, keamanan, FAQ, dan final CTA. Pendaftaran mandiri **belum** ada — `/register` mengarahkan ke WhatsApp resmi 0822-3772-7330. Trial 14 hari **belum aktif**. Kuota/fitur per paket menyusul. Aplikasi tenant dilindungi login dengan role owner/admin/cashier. Modul kasir, pembelian, penjualan, keuangan, dan laporan **belum** diimplementasikan. Daftar fitur di dokumen adalah peta ruang lingkup produk — **bukan** pernyataan bahwa semua fitur sudah selesai atau tersedia.
 
 - **Nama proyek:** IRIS Platform
 - **Nama aplikasi:** POS IRIS
@@ -23,10 +23,10 @@ Komponen aplikasi (skeleton tahap 2 — sudah ada, masih placeholder):
 | Aplikasi | File | Port | Fungsi |
 |---|---|---|---|
 | Landing | `landing_app.py` | 5000 | Situs publik, informasi produk, pendaftaran via WhatsApp (provisioning mandiri belum ada) |
-| Tenant | `tenant_app.py` | 5001 | Aplikasi operasional milik tenant — **login wajib**, dashboard + daftar produk |
+| Tenant | `tenant_app.py` | 5001 | Aplikasi operasional milik tenant — **login wajib**, dashboard + modul produk & stok |
 | Super Admin | `superadmin_app.py` | 5002 | Pengelolaan platform dan tenant (placeholder, **belum ada auth**) |
 
-File pendukung: `config.py` (config dari environment), `iris_db.py` (`get_tenant_db`, `init_tenant_db`, `create_user`, `verify_user`), `iris_schema.sql` (skema v1, 14 tabel), `iris_auth.py` (Flask-Login + `require_role`), `forms.py` (form login), `templates/` (Jinja2), `tests/`, `requirements.txt`, `.env.example`.
+File pendukung: `config.py` (config dari environment), `iris_db.py` (`get_tenant_db`, `init_tenant_db`, `migrate_tenant_db`, `create_user`, `verify_user`, produk & stok), `iris_schema.sql` (skema v2, 14 tabel), `iris_auth.py` (Flask-Login + `require_role`), `forms.py` (form login, produk, stok), `templates/` (Jinja2), `tests/`, `requirements.txt`, `.env.example`.
 
 ## Menjalankan aplikasi (lokal)
 
@@ -52,7 +52,7 @@ Tes:
 
 ```bash
 python -m pytest tests/ -q
-# Terakhir diuji lokal: 10 passed (2026-11-25)
+# Terakhir diuji lokal: 25 passed (2026-11-25)
 ```
 
 > **Peringatan keamanan:** Super Admin masih **belum punya autentikasi** — jangan diekspos ke internet. Aplikasi tenant sudah login + role, tapi belum ada rate limiting login, penguncian akun, atau reset password. Secret hanya dari environment (`.env`, tidak di-commit); password pengguna disimpan sebagai hash (Werkzeug/scrypt), bukan teks mentah.

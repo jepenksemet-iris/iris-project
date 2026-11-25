@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{% if product %}Edit Produk — {{ product.name }}{% else %}Tambah Produk{% endif %} — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>{% if product %}Edit Produk — {{ product.name }}{% else %}Tambah Produk{% endif %}</h1>
+<p><a href="/products">Kembali ke daftar produk</a></p>
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul>
+  {% for category, message in messages %}
+  <li><strong>{{ category }}:</strong> {{ message }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+<form method="post">
+  {{ form.hidden_tag() }}
+  <p>{{ form.sku.label }}<br>{{ form.sku(size=32) }}{% for e in form.sku.errors %} <span>{{ e }}</span>{% endfor %}</p>
+  <p>{{ form.name.label }}<br>{{ form.name(size=48) }}{% for e in form.name.errors %} <span>{{ e }}</span>{% endfor %}</p>
+  <p>{{ form.barcode.label }}<br>{{ form.barcode(size=32) }}{% for e in form.barcode.errors %} <span>{{ e }}</span>{% endfor %}</p>
+  <p>{{ form.category.label }}<br>{{ form.category(size=32) }} <small>Kategori baru dibuat otomatis bila belum ada.</small></p>
+  <p>{{ form.unit.label }}<br>{{ form.unit(size=16) }} <small>Satuan baru dibuat otomatis bila belum ada.</small></p>
+  <p>{{ form.buy_price.label }}<br>{{ form.buy_price() }}{% for e in form.buy_price.errors %} <span>{{ e }}</span>{% endfor %}</p>
+  <p>{{ form.sell_price.label }}<br>{{ form.sell_price() }}{% for e in form.sell_price.errors %} <span>{{ e }}</span>{% endfor %}</p>
+  <p>{{ form.min_stock.label }}<br>{{ form.min_stock() }}{% for e in form.min_stock.errors %} <span>{{ e }}</span>{% endfor %}</p>
+  <p>{{ form.submit() }}</p>
+</form>
+{% endblock %}

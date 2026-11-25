@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-11-25 — Tahap 7: tutup gap P0 produk & stok + migrasi skema v2 (Paket B)
+
+- **Migrasi skema v1 → v2** (`iris_schema.sql`, `iris_db.py`): `SCHEMA_VERSION = 2`; `stock_movements.kind` ditambah `opening_balance`, `adjustment_in`, `adjustment_out`; kolom baru `effective_date`. `migrate_tenant_db()` membuat ulang tabel dalam satu transaksi (CHECK SQLite tidak bisa di-ALTER) dengan pemetaan data lama: `adjustment` + catatan "Saldo awal…" → `opening_balance`, positif → `adjustment_in`, negatif → `adjustment_out`. `init_tenant_db()` menjalankan migrasi otomatis untuk DB lama; DB baru langsung v2.
+- `iris_db.py` — `record_opening_balance()` (qty > 0; nol tidak menulis mutasi; duplikat per produk×outlet ditolak), `reconcile_stock()` (saldo `stock` vs jumlah mutasi), `list_stock_movements()` dengan filter jenis + rentang tanggal, `list_products()` dengan filter kategori, `list_categories()`, `update_product()` melarang ganti satuan bila produk sudah punya stok/mutasi.
+- `forms.py` — satuan dasar kini wajib; `min_stock` opsional (kosong = 0); `StockAdjustForm` kini punya jenis mutasi (saldo awal / masuk / keluar) + tanggal efektif.
+- `tenant_app.py` + template — daftar produk: filter kategori + indikator Habis/Rendah; halaman stok: form jenis mutasi + tanggal efektif, filter ledger, kolom masuk/keluar + saldo berjalan.
+- Tes baru: `tests/test_migration_v2.py` (DB baru v2; migrasi v1→v2 dengan pemetaan jenis + data stok utuh) dan 7 tes baru di `tests/test_products_stock.py` (saldo awal sekali saja, nama kosong, edit SKU sama/ID tetap, satuan terkunci, rekonsiliasi + atomicity via trigger, CSRF tanpa token, SQL injection sebagai data, filter kategori + badge stok). Total **25 passed** lokal (Python 3.12.3); tenant dicek langsung lewat HTTP (`/login` 200, `/products` tanpa login 302, `/health` 200).
+- Keputusan pemilik yang diterapkan (Paket B): jenis mutasi baru via migrasi v2; satuan dasar wajib; pagination tidak dibuat (pola ini belum dipakai aplikasi mana pun, sesuai spesifikasi §P0.1).
+- Dokumen: `docs/DATABASE.md` (bagian skema v2), `docs/P0_PRODUK_STOK_GAP_ANALYSIS.md` (status gap diperbarui), matriks iPOS 4.
+
+## 2026-11-25 — Tahap 6: modul produk & stok
+
+- `iris_db.py` — `create_product()`, `get_product()`, `update_product()`, `set_product_active()` (arsip, bukan hapus), `list_products()` (cari SKU/nama + total stok), `get_or_create_category/unit()`, `get_default_outlet()` (buat "Outlet Utama" bila belum ada outlet), `adjust_stock()` (atomik: ubah `stock` + tulis `stock_movements` dalam satu transaksi; stok hasil tidak boleh negatif), `list_stock_movements()`, `get_stock_qty()`, `list_outlets()`.
+- `tenant_app.py` — route baru (login wajib; tambah/edit/arsip/stok hanya owner/admin, 403 untuk kasir): `GET /products` (cari + filter nonaktif + stok total), `GET/POST /products/new`, `GET/POST /products/<id>/edit`, `POST /products/<id>/archive|activate`, `GET/POST /products/<id>/stock` (penyesuaian + kartu stok).
+- `forms.py` — `ProductForm` (SKU, nama, barcode, kategori, satuan, harga beli/jual, stok minimum), `StockAdjustForm` (outlet, jumlah +/-, keterangan), `ConfirmForm` (CSRF untuk arsip).
+- Template tenant baru/diubah: `products.html` (daftar + cari), `product_form.html`, `product_stock.html` (stok per outlet + kartu stok), `index.html` (tautan + status modul).
+- Tes baru `tests/test_products_stock.py` (6 tes): tambah + SKU duplikat ditolak, kasir 403 tapi bisa lihat daftar, edit + arsip/aktifkan, penyesuaian +10/−3 = 7 dengan 2 mutasi, penyesuaian negatif berlebih ditolak tanpa mutasi, isolasi antar-tenant. Total **16 passed** lokal (Python 3.12.3); tenant dicek langsung lewat HTTP (`/login` 200, `/products` tanpa login 302, `/health` 200).
+- Yang BELUM ada: kasir/penjualan, pembelian, laporan, keuangan, dan manajemen outlet/kategori mandiri (kategori/satuan dibuat otomatis dari form produk; outlet default dibuat otomatis).
+
 ## 2026-11-25 — Tahap 5: matriks iPOS 4 vs IRIS + rancangan UX
 
 - `docs/IPOS4_FEATURE_MATRIX.md` — audit read-only repo head `71ef6ec0` dibandingkan dengan benchmark iPOS 4 (9 menu utama). Setiap fitur dinilai `Sudah Ada dan Teruji` / `Parsial` / `Belum Ada` / `Perlu Keputusan Produk` / `Tidak Relevan` dengan bukti file/route/test. Temuan kunci: 14 tabel skema v1 ada, tetapi belum ada logika bisnis untuk `sales, purchases, stock_movements, cash_transactions`; produk hanya daftar baca saja; konsinyasi dan proses bulanan manual direkomendasikan tidak ditiru.

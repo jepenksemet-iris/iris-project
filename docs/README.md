@@ -16,6 +16,7 @@ Dokumen induk (sumber kebenaran rancangan): [DOKUMENTASI_PROYEK_IRIS.md](DOKUMEN
 | [TENANT_PROVISIONING.md](TENANT_PROVISIONING.md) | Alur pendaftaran dan Tenant Provisioning Engine |
 | [IPOS4_FEATURE_MATRIX.md](IPOS4_FEATURE_MATRIX.md) | Matriks fitur iPOS 4 vs implementasi IRIS, dengan bukti file/route/test |
 | [IRIS_UX_INFORMATION_ARCHITECTURE.md](IRIS_UX_INFORMATION_ARCHITECTURE.md) | Rancangan menu, sitemap, role, dan pola UX IRIS |
+| [P0_PRODUK_STOK_GAP_ANALYSIS.md](P0_PRODUK_STOK_GAP_ANALYSIS.md) | Gap analysis spesifikasi P0 produk & stok vs implementasi, keputusan Paket B |
 | [CHANGELOG.md](CHANGELOG.md) | Catatan perubahan dokumentasi & keputusan |
 
 > Bedakan dengan jelas antara fitur yang sudah berjalan, sedang dikerjakan, dan masih berupa rencana. Perbarui dokumen setiap kali ada keputusan arsitektur, perubahan modul, perubahan paket harga, atau perubahan prosedur deployment.
