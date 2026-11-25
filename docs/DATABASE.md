@@ -14,6 +14,12 @@ tenants/
 
 Akses database tenant dilakukan melalui `get_tenant_db(slug)` di `iris_db.py`, dan skema diterapkan oleh `init_tenant_db(slug)` dari `iris_schema.sql`.
 
+## Skema v4 (P1 Tahap 5, 2026-11-25)
+
+Versi skema dicatat di `PRAGMA user_version = 4`. Database lama dimigrasi otomatis oleh `iris_db.migrate_tenant_db()` (rantai v1→v2→v3→v4).
+
+Perubahan v4: satu-satunya perubahan adalah `stock_movements.kind` ditambah `'sale_void'` (mutasi pembalik pembatalan penjualan). Tabel dibuat ulang dalam satu transaksi; data lama disalin apa adanya, tanpa pemetaan jenis.
+
 ## Skema v3 (P1 Tahap 3, 2026-11-25)
 
 Versi skema dicatat di `PRAGMA user_version = 3`. Database lama dimigrasi otomatis oleh `iris_db.migrate_tenant_db()` (rantai v1→v2→v3 atau v2→v3).

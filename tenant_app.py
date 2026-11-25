@@ -46,9 +46,12 @@ from forms import (
     LoginForm,
     ProductForm,
     StockAdjustForm,
+    VoidForm,
 )
 from iris_auth import TenantUser, require_role, setup_auth
 from iris_db import (
+    PAYMENT_METHODS,
+    SALE_STATUSES,
     adjust_stock,
     confirm_payment,
     create_product,
@@ -68,6 +71,7 @@ from iris_db import (
     list_products,
     list_sales,
     list_stock_movements,
+    void_sale,
     record_opening_balance,
     search_products,
     set_product_active,
@@ -466,23 +470,39 @@ def create_app(config_class=None):
     @app.get("/sales")
     @login_required
     def sales_list():
+        from datetime import datetime
+
+        def _valid_date(value):
+            try:
+                datetime.strptime(value, "%Y-%m-%d")
+                return value
+            except (TypeError, ValueError):
+                return None
+
         slug = session["tenant"]
         q = (request.args.get("q") or "").strip()
-        date_from = request.args.get("dari") or ""
-        date_to = request.args.get("sampai") or ""
+        date_from = _valid_date(request.args.get("dari") or "")
+        date_to = _valid_date(request.args.get("sampai") or "")
         status = request.args.get("status") or ""
+        payment_method = request.args.get("metode") or ""
+        order = request.args.get("urut") or "newest"
+        if order not in ("newest", "oldest"):
+            order = "newest"
         conn = _db(slug)
         try:
             rows = list_sales(
                 conn, q=q or None,
-                date_from=date_from or None, date_to=date_to or None,
+                date_from=date_from, date_to=date_to,
                 status=status or None,
+                payment_method=payment_method or None, order=order,
             )
         finally:
             conn.close()
         return render_template(
             "pos/sales_list.html", tenant=slug, sales=rows, q=q,
-            date_from=date_from, date_to=date_to, status=status,
+            date_from=date_from or "", date_to=date_to or "",
+            status=status, payment_method=payment_method, order=order,
+            statuses=SALE_STATUSES, methods=PAYMENT_METHODS,
         )
 
     @app.get("/sales/<int:sale_id>")
@@ -496,9 +516,17 @@ def create_app(config_class=None):
             conn.close()
         if data is None:
             abort(404)
+        sale = data["sale"]
+        payment_status = (
+            "Lunas" if sale["status"] == "completed" and sale["paid"] >= sale["total"]
+            else "Belum terverifikasi" if sale["status"] == "pending"
+            else "Dibatalkan" if sale["status"] == "void"
+            else sale["status"])
         return render_template(
             "pos/sale_detail.html", tenant=slug, **data,
-            confirm_form=ConfirmForm(),
+            confirm_form=ConfirmForm(), void_form=VoidForm(),
+            payment_status=payment_status,
+            can_void=current_user.role in ("owner", "admin"),
         )
 
     @app.get("/sales/<int:sale_id>/receipt")
@@ -513,6 +541,31 @@ def create_app(config_class=None):
         if data is None:
             abort(404)
         return render_template("pos/receipt.html", tenant=slug, **data)
+
+    @app.post("/sales/<int:sale_id>/void")
+    @require_role("owner", "admin")
+    def sale_void(sale_id):
+        slug = session["tenant"]
+        form = VoidForm()
+        if not form.validate_on_submit():
+            for field_errors in form.errors.values():
+                for err in field_errors:
+                    flash(err, "error")
+            return redirect(url_for("sale_detail", sale_id=sale_id))
+        conn = _db(slug)
+        try:
+            if get_sale(conn, sale_id) is None:
+                abort(404)
+            try:
+                void_sale(conn, sale_id, current_user.row_id,
+                          form.reason.data)
+            except (ValueError, sqlite3.IntegrityError) as exc:
+                flash(str(exc), "error")
+            else:
+                flash("Transaksi dibatalkan dan stok dikembalikan.", "success")
+        finally:
+            conn.close()
+        return redirect(url_for("sale_detail", sale_id=sale_id))
 
     @app.post("/sales/<int:sale_id>/confirm-payment")
     @require_role("owner", "admin")

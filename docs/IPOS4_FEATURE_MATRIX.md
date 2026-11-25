@@ -52,7 +52,8 @@
 |---|---|---|---|
 | Pesanan Penjualan / Sales Order | Belum Ada | Tidak ada tabel sales order | P1 — setelah kasir dasar jalan |
 | Daftar / Input Penjualan (back-office) | Parsial | **P1 Tahap 3:** riwayat penjualan `/sales` + detail + struk sudah ada dan teruji; penyimpanan lewat kasir, bukan form back-office terpisah | P1 — form input penjualan back-office bila dibutuhkan |
-| Penjualan Kasir (POS) | Sudah Ada dan Teruji | **P1 Tahap 2–3 (2026-11-25):** halaman kasir `/pos` + keranjang + checkout atomik (tunai + non-tunai manual, invoice unik, idempotensi, stok berkurang lewat ledger; `tests/test_pos.py` + `tests/test_checkout.py`, 27 tes). Tanpa diskon/pajak di P1 dasar; kuantitas checkout harus bulat | P1 — Tahap 5 pembatalan; retur sebagian terpisah |
+| Penjualan Kasir (POS) | Sudah Ada dan Teruji | **P1 Tahap 2–3 (2026-11-25):** halaman kasir `/pos` + keranjang + checkout atomik (tunai + non-tunai manual, invoice unik, idempotensi, stok berkurang lewat ledger; `tests/test_pos.py` + `tests/test_checkout.py`, 27 tes). Tanpa diskon/pajak di P1 dasar; kuantitas checkout harus bulat | P1 — retur sebagian terpisah |
+| Pembatalan Penjualan (Void) | Sudah Ada dan Teruji | **P1 Tahap 5 (2026-11-25):** `POST /sales/<id>/void` owner/admin, alasan wajib, atomik, stok dikembalikan lewat mutasi `sale_void` (skema v4), transaksi/item/pembayaran/mutasi asli tetap tersimpan; `tests/test_void.py`, 12 tes. Pembatalan bukan refund — pengembalian uang proses terpisah | P1 — retur sebagian terpisah |
 | History Harga Jual | Belum Ada | Dapat diturunkan dari `sale_items` setelah penjualan ada | P1 |
 | Pembayaran Piutang, Status Lunas BG/Cek | Belum Ada | Tidak ada tabel piutang/pembayaran | P0 (piutang) — piutang = sisa nilai penjualan kredit |
 | Retur Penjualan | Belum Ada | Tanpa tabel/route | P0 — retur membalikkan stok + piutang sesuai aturan |

@@ -95,7 +95,7 @@ def _build_v2_db(tmp_path):
 def test_fresh_db_is_v3(tmp_path):
     conn = init_tenant_db("toko-demo", data_dir=str(tmp_path))
     try:
-        assert get_schema_version(conn) == SCHEMA_VERSION == 3
+        assert get_schema_version(conn) == SCHEMA_VERSION == 4
         tables = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table'")}
         assert "sale_payments" in tables
@@ -121,7 +121,7 @@ def test_migrate_v2_to_v3_keeps_data(tmp_path):
     _build_v2_db(tmp_path)
     conn = init_tenant_db("toko-demo", data_dir=str(tmp_path))
     try:
-        assert get_schema_version(conn) == 3
+        assert get_schema_version(conn) == 4  # rantai migrasi berakhir di v4
         sale = conn.execute("SELECT * FROM sales WHERE id = 1").fetchone()
         assert sale["invoice_no"] == "INV-20261125-0001"
         assert sale["total"] == 34000 and sale["change_amount"] == 0
@@ -141,7 +141,7 @@ def test_migrate_v2_to_v3_keeps_data(tmp_path):
     # Migrasi ulang idempotent: data dan versi tidak berubah.
     conn = init_tenant_db("toko-demo", data_dir=str(tmp_path))
     try:
-        assert get_schema_version(conn) == 3
+        assert get_schema_version(conn) == 4  # rantai migrasi berakhir di v4
         assert conn.execute(
             "SELECT COUNT(*) n FROM sales").fetchone()["n"] == 1
     finally:
@@ -182,7 +182,7 @@ def test_migrate_v1_to_v3_chain(tmp_path):
     conn.close()
     conn = init_tenant_db("toko-demo", data_dir=str(tmp_path))
     try:
-        assert get_schema_version(conn) == 3
+        assert get_schema_version(conn) == 4  # rantai migrasi berakhir di v4
         assert conn.execute(
             "SELECT kind FROM stock_movements").fetchone()["kind"] == "opening_balance"
         assert conn.execute(

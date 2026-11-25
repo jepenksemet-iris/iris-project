@@ -100,6 +100,15 @@ class CartRemoveForm(FlaskForm):
     submit = SubmitField("Hapus")
 
 
+class VoidForm(FlaskForm):
+    reason = StringField(
+        "Alasan pembatalan",
+        validators=[DataRequired(message="Alasan pembatalan wajib diisi."),
+                    Length(max=500)],
+    )
+    submit = SubmitField("Batalkan transaksi")
+
+
 class CheckoutForm(FlaskForm):
     payment_method = SelectField(
         "Metode pembayaran",

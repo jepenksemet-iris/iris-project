@@ -1,4 +1,4 @@
-"""Akses database SQLite per tenant (tahap 9: skema v3 + penjualan kasir).
+"""Akses database SQLite per tenant (tahap 10: skema v4 + pembatalan kasir).
 
 Pola dari dokumen proyek:
     <DATA_DIR>/<tenant-slug>/iris.db
@@ -22,15 +22,16 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 _SCHEMA_PATH = Path(__file__).with_name("iris_schema.sql")
 
-# Jenis mutasi stok yang sah (skema v2). 'adjustment' dipertahankan
+# Jenis mutasi stok yang sah (skema v4). 'adjustment' dipertahankan
 # untuk kompatibilitas data lama; form baru memakai opening_balance /
-# adjustment_in / adjustment_out.
+# adjustment_in / adjustment_out. 'sale_void' = mutasi pembalik
+# pembatalan penjualan (P1 Tahap 5); 'return' dicadangkan untuk retur.
 STOCK_MOVEMENT_KINDS = (
     "sale", "purchase", "adjustment", "return", "transfer",
-    "opening_balance", "adjustment_in", "adjustment_out",
+    "opening_balance", "adjustment_in", "adjustment_out", "sale_void",
 )
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
@@ -205,6 +206,50 @@ def _migrate_v2_to_v3(conn):
         conn.execute("PRAGMA foreign_keys = ON")
 
 
+def _migrate_v3_to_v4(conn):
+    """v3 -> v4: tambah jenis mutasi 'sale_void' (pembatalan penjualan).
+
+    CHECK SQLite tidak bisa diubah dengan ALTER, jadi tabel
+    stock_movements dibuat ulang seperti migrasi v1->v2: data disalin
+    apa adanya (tidak ada pemetaan jenis), dalam satu transaksi.
+    """
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        with conn:
+            conn.execute(
+                "CREATE TABLE stock_movements_new ("
+                " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                " product_id INTEGER NOT NULL REFERENCES products (id),"
+                " outlet_id INTEGER NOT NULL REFERENCES outlets (id),"
+                " qty REAL NOT NULL,"
+                " kind TEXT NOT NULL CHECK (kind IN ('sale', 'purchase',"
+                " 'adjustment', 'return', 'transfer', 'opening_balance',"
+                " 'adjustment_in', 'adjustment_out', 'sale_void')),"
+                " ref_type TEXT NOT NULL DEFAULT '',"
+                " ref_id INTEGER,"
+                " note TEXT NOT NULL DEFAULT '',"
+                " user_id INTEGER REFERENCES users (id) ON DELETE SET NULL,"
+                " effective_date TEXT,"
+                " created_at TEXT NOT NULL DEFAULT (datetime('now')))"
+            )
+            conn.execute(
+                "INSERT INTO stock_movements_new"
+                " (id, product_id, outlet_id, qty, kind, ref_type, ref_id,"
+                "  note, user_id, effective_date, created_at)"
+                " SELECT id, product_id, outlet_id, qty, kind, ref_type,"
+                "  ref_id, note, user_id, effective_date, created_at"
+                " FROM stock_movements"
+            )
+            conn.execute("DROP TABLE stock_movements")
+            conn.execute("ALTER TABLE stock_movements_new RENAME TO stock_movements")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_stock_movements_product"
+                " ON stock_movements (product_id, created_at)"
+            )
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+
 def migrate_tenant_db(conn, from_version):
     """Migrasikan database tenant ke SCHEMA_VERSION, bertahap per versi.
 
@@ -220,6 +265,9 @@ def migrate_tenant_db(conn, from_version):
         from_version = 2
     if from_version == 2:
         _migrate_v2_to_v3(conn)
+        from_version = 3
+    if from_version == 3:
+        _migrate_v3_to_v4(conn)
         return
     raise ValueError(f"tidak ada jalur migrasi dari versi skema {from_version}")
 
@@ -854,9 +902,12 @@ def get_sale(conn, sale_id):
     """Header penjualan + items + pembayaran + kasir (atau None)."""
     sale = conn.execute(
         "SELECT s.*, u.full_name AS cashier_name, u.username AS cashier_username,"
-        " o.name AS outlet_name FROM sales s"
+        " o.name AS outlet_name, o.address AS outlet_address,"
+        " o.phone AS outlet_phone,"
+        " v.full_name AS voided_by_name FROM sales s"
         " LEFT JOIN users u ON u.id = s.user_id"
         " LEFT JOIN outlets o ON o.id = s.outlet_id"
+        " LEFT JOIN users v ON v.id = s.voided_by"
         " WHERE s.id = ?",
         (sale_id,),
     ).fetchone()
@@ -873,10 +924,15 @@ def get_sale(conn, sale_id):
     return {"sale": sale, "items": items, "payments": payments}
 
 
+SALE_STATUSES = ("completed", "pending", "void", "returned")
+
+
 def list_sales(conn, q=None, date_from=None, date_to=None, status=None,
-               limit=100):
-    """Daftar penjualan, terbaru dulu. Cari nomor invoice; saring
-    tanggal/status bila diisi."""
+               payment_method=None, order="newest", limit=100):
+    """Daftar penjualan. Cari nomor invoice; saring tanggal/status/
+    metode bila diisi. Nilai filter yang tidak dikenal diabaikan
+    (bukan error) agar URL filter yang salah tidak menampilkan
+    apa-apa secara diam-diam atau crash. Urutan: newest/oldest."""
     sql = (
         "SELECT s.*, u.full_name AS cashier_name,"
         " (SELECT COUNT(*) FROM sale_items i WHERE i.sale_id = s.id)"
@@ -893,12 +949,18 @@ def list_sales(conn, q=None, date_from=None, date_to=None, status=None,
     if date_to:
         where.append("date(s.created_at) <= ?")
         args.append(date_to)
-    if status:
+    if status in SALE_STATUSES:
         where.append("s.status = ?")
         args.append(status)
+    if payment_method in PAYMENT_METHODS:
+        where.append("s.payment_method = ?")
+        args.append(payment_method)
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY s.created_at DESC, s.id DESC LIMIT ?"
+    if order == "oldest":
+        sql += " ORDER BY s.created_at ASC, s.id ASC LIMIT ?"
+    else:
+        sql += " ORDER BY s.created_at DESC, s.id DESC LIMIT ?"
     args.append(limit)
     return conn.execute(sql, args).fetchall()
 
@@ -922,4 +984,83 @@ def confirm_payment(conn, sale_id, user_id):
             " WHERE id = ? AND status = 'pending'",
             (sale_id,),
         )
+    return True
+
+
+# ----------------------------------------------------------------------
+# Pembatalan penjualan (P1 Tahap 5)
+# ----------------------------------------------------------------------
+
+def void_sale(conn, sale_id, user_id, reason):
+    """Batalkan penjualan secara atomik (BEGIN IMMEDIATE).
+
+    Transaksi, item, pembayaran, dan mutasi `sale` asli TIDAK dihapus
+    atau diubah. Yang terjadi: status -> 'void' + jejak pembatalan
+    (alasan, pengguna, waktu), dan satu mutasi pembalik kind='sale_void'
+    per item yang mengembalikan stok persis kuantitas yang dijual.
+
+    Kebijakan pembayaran: pembatalan BUKAN pengembalian uang. `paid`
+    dan `sale_payments` tetap tercatat apa adanya; tidak ada status
+    'refunded' yang dipalsukan. Pengembalian uang (jika ada) adalah
+    proses terpisah.
+
+    Hanya sale berstatus 'completed'/'pending' yang dapat dibatalkan.
+    Pembatalan kedua ditolak (status sudah 'void' + pemeriksaan mutasi
+    pembalik yang sudah ada), jadi stok tidak pernah dikembalikan dua
+    kali. Gagal di langkah mana pun -> rollback seluruhnya.
+    """
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("alasan pembatalan wajib diisi")
+    if len(reason) > 500:
+        raise ValueError("alasan pembatalan maksimal 500 karakter")
+    wasolation = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            sale = conn.execute(
+                "SELECT * FROM sales WHERE id = ?", (sale_id,)).fetchone()
+            if sale is None:
+                raise ValueError("transaksi tidak ditemukan")
+            if sale["status"] == "void":
+                raise ValueError("transaksi sudah dibatalkan")
+            if sale["status"] not in ("completed", "pending"):
+                raise ValueError(
+                    f"transaksi berstatus {sale['status']!r} tidak dapat"
+                    " dibatalkan")
+            existing = conn.execute(
+                "SELECT 1 FROM stock_movements"
+                " WHERE ref_type = 'sale_void' AND ref_id = ? LIMIT 1",
+                (sale_id,),
+            ).fetchone()
+            if existing:
+                raise ValueError(
+                    "mutasi pembalik untuk transaksi ini sudah ada")
+            items = conn.execute(
+                "SELECT * FROM sale_items WHERE sale_id = ? ORDER BY id",
+                (sale_id,),
+            ).fetchall()
+            for item in items:
+                _apply_stock_change(
+                    conn, item["product_id"], sale["outlet_id"],
+                    item["qty"],
+                    note=f"Pembatalan {sale['invoice_no']}: {reason}",
+                    user_id=user_id, kind="sale_void",
+                    ref_type="sale_void", ref_id=sale_id,
+                )
+            cur = conn.execute(
+                "UPDATE sales SET status = 'void', void_reason = ?,"
+                " voided_by = ?, voided_at = datetime('now')"
+                " WHERE id = ? AND status IN ('completed', 'pending')",
+                (reason, user_id, sale_id),
+            )
+            if cur.rowcount != 1:
+                raise ValueError("transaksi sudah berubah status")
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.isolation_level = wasolation
     return True

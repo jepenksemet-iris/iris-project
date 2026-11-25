@@ -17,7 +17,12 @@
 <div class="receipt">
   <h1>POS IRIS</h1>
   <h2>{{ sale.outlet_name or '' }}</h2>
-  <p>{{ sale.invoice_no }}<br>{{ sale.created_at }}<br>Kasir: {{ sale.cashier_name or '-' }}</p>
+  {% if sale.outlet_address %}<p>{{ sale.outlet_address }}{% if sale.outlet_phone %} — {{ sale.outlet_phone }}{% endif %}</p>{% endif %}
+  {% if sale.status == 'void' %}
+  <h2 style="border:2px solid currentColor">*** DIBATALKAN ***</h2>
+  <p>Alasan: {{ sale.void_reason }}</p>
+  {% endif %}
+  <p>{{ sale.invoice_no }}<br>{{ sale.created_at }}<br>Kasir: {{ sale.cashier_name or '-' }}<br>Status: {{ sale.status }}</p>
   <hr>
   <table>
     {% for item in items %}

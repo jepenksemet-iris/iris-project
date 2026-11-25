@@ -10,9 +10,23 @@
   <label>Status:
     <select name="status">
       <option value="">Semua</option>
-      {% for s in ["completed", "pending", "void", "returned"] %}
+      {% for s in statuses %}
       <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
       {% endfor %}
+    </select>
+  </label>
+  <label>Metode:
+    <select name="metode">
+      <option value="">Semua</option>
+      {% for m in methods %}
+      <option value="{{ m }}" {% if payment_method == m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Urut:
+    <select name="urut">
+      <option value="newest" {% if order == 'newest' %}selected{% endif %}>Terbaru</option>
+      <option value="oldest" {% if order == 'oldest' %}selected{% endif %}>Terlama</option>
     </select>
   </label>
   <button type="submit">Filter</button>

@@ -17,10 +17,17 @@
   <li>Kasir: {{ sale.cashier_name or '-' }}</li>
   <li>Outlet: {{ sale.outlet_name or '-' }}</li>
   <li>Status: {{ sale.status }}{% if sale.status == 'pending' %} — pembayaran non-tunai dicatat manual, menunggu konfirmasi owner/admin{% endif %}</li>
+  <li>Status pembayaran: {{ payment_status }}</li>
   <li>Metode: {{ sale.payment_method }}{% if sale.payment_ref %} (ref: {{ sale.payment_ref }}){% endif %}</li>
+  {% if sale.status == 'void' %}
+  <li><strong>Transaksi ini DIBATALKAN.</strong></li>
+  <li>Alasan: {{ sale.void_reason }}</li>
+  <li>Dibatalkan oleh: {{ sale.voided_by_name or '-' }} pada {{ sale.voided_at }}</li>
+  <li>Pembayaran asli tetap tercatat di bawah; pembatalan ini bukan bukti pengembalian uang. Pengembalian uang (jika ada) adalah proses terpisah.</li>
+  {% endif %}
 </ul>
 <table>
-  <tr><th>Produk</th><th>SKU</th><th>Satuan</th><th>Kuantitas</th><th>Harga</th><th>Subtotal</th></tr>
+  <tr><th>Produk</th><th>SKU</th><th>Satuan</th><th>Kuantitas</th><th>Harga</th><th>Diskon</th><th>Subtotal</th></tr>
   {% for item in items %}
   <tr>
     <td>{{ item.product_name }}</td>
@@ -28,7 +35,8 @@
     <td>{{ item.unit or '-' }}</td>
     <td>{{ item.qty }}</td>
     <td>Rp {{ item.price }}</td>
-    <td>Rp {{ (item.price * item.qty)|int }}</td>
+    <td>Rp {{ item.discount }}</td>
+    <td>Rp {{ (item.price * item.qty - item.discount)|int }}</td>
   </tr>
   {% endfor %}
 </table>
@@ -53,6 +61,16 @@
   {{ confirm_form.hidden_tag() }}
   <p>Pembayaran non-tunai ini belum terverifikasi. Hanya owner/admin yang dapat mengonfirmasi.</p>
   <button type="submit">Konfirmasi pembayaran</button>
+</form>
+{% endif %}
+{% if can_void and sale.status in ['completed', 'pending'] %}
+<hr>
+<h2>Batalkan transaksi</h2>
+<p>Pembatalan tidak menghapus transaksi ini: status berubah menjadi <em>void</em>, stok dikembalikan lewat mutasi pembalik, dan pembayaran asli tetap tercatat. Pembatalan bukan pengembalian uang.</p>
+<form method="post" action="/sales/{{ sale.id }}/void" onsubmit="return confirm('Batalkan transaksi {{ sale.invoice_no }} dan kembalikan stok?');">
+  {{ void_form.hidden_tag() }}
+  <p>{{ void_form.reason.label }}<br>{{ void_form.reason(size=60) }}{% for e in void_form.reason.errors %} <span>{{ e }}</span>{% endfor %}</p>
+  <p><button type="submit">Batalkan transaksi</button></p>
 </form>
 {% endif %}
 {% endblock %}
