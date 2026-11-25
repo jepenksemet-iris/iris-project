@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-25 — Laporan P1 (Rencana Lanjutan, Langkah 1)
+
+- **Tanpa migrasi skema.** Laporan hanya membaca data transaksi yang sudah ada (`iris_db.report_*`, route `/reports*`, template `templates/reports/`).
+- **Filter tanggal UTC** (`parse_report_range`): rentang kalender UTC half-open `[dari 00:00, sampai+1 hari 00:00)` — batas awal inklusif, batas akhir eksklusif; tanggal tidak valid diabaikan; rentang default bulan berjalan (UTC). Definisi metrik terdokumentasi di `docs/REPORTS.md`.
+- **Ringkasan usaha** (`/reports`): penjualan kotor/diskon/nilai retur/penjualan bersih/nilai pembatalan (terpisah), pembayaran per metode (Σ `paid` transaksi aktif), total/retur/bersih pembelian.
+- **Laporan penjualan** (`/reports/sales`): baris per transaksi (nomor, tanggal UTC, kasir, item, subtotal, diskon, total, metode, status) + ringkasan; transaksi batal tidak dihitung sebagai penjualan aktif.
+- **Laporan pembelian** (`/reports/purchases`): baris per pembelian (nomor, tanggal, pemasok, item, total, status) + ringkasan; status pembayaran/utang dinyatakan belum tersedia.
+- **Laporan stok** (`/reports/stock`): saldo saat ini + masuk/keluar dari ledger pada rentang + indikator Habis/Rendah; filter produk/kategori (pencarian nama/SKU).
+- **Laporan retur & pembatalan** (`/reports/returns`): retur (jenis, transaksi asal, nilai, status) + pembatalan penjualan/pembelian (alasan, oleh); peringatan retur bukan bukti refund dibayar.
+- **Tes baru (8):** `tests/test_reports.py` — laporan kosong, perhitungan ringkasan (kotor 119000, retur 17000, bersih 102000, batal 24000 terpisah; pembelian bersih 72000), stok dari ledger (masuk/keluar cocok), batas rentang (00:00:00 masuk, 00:00:00 hari berikut tidak masuk), tanggal tidak valid diabaikan, retur + pembatalan, isolasi tenant + login wajib. Total **109 passed** lokal; smoke HTTP: `/reports` dan `/reports/sales` tanpa login 302, `/login` 200, `/health` 200.
+- **Keterbatasan yang dicatat:** tidak ada laporan laba/rugi (omzet bukan laba); tidak ada laporan hutang/piutang dan keuangan — menunggu modul keuangan; `cash_transactions` tetap tidak dipakai.
+- Dokumen: `docs/REPORTS.md` (baru), `docs/RENCANA_LANJUTAN_AUDIT.md` (tahap 1), matriks iPOS 4.
+
 ## 2026-11-25 — P1 Tahap 7: retur penjualan & retur pembelian (migrasi v6)
 
 - **Audit dulu** (`docs/P1_RETUR_AUDIT.md`): skema v5 sudah mencadangkan status `returned` di sales/purchases dan jenis mutasi `return` (keduanya belum pernah dipakai); tidak ada konsep stok rusak/karantina; tidak ada mekanisme refund/utang yang bisa diaudit — nilai retur dicatat sebagai informasi dan pengembalian uang **tidak** otomatis.

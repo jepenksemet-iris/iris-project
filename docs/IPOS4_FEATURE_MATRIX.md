@@ -98,8 +98,8 @@
 
 | Kapabilitas benchmark | Status IRIS | Bukti | Gap / Rekomendasi |
 |---|---|---|---|
-| Laporan Master (item, supplier, pelanggan, sales) | Belum Ada | Daftar produk baca saja adalah satu-satunya "laporan" | P1 — laporan = daftar + filter + ekspor, memakai pola halaman daftar yang sama |
-| Laporan Pembelian / Penjualan / Persediaan | Belum Ada | Tanpa route/template | P1 — penjualan/pembelian/persediaan setelah modul transaksinya ada |
+| Laporan Master (item, supplier, pelanggan, sales) | Parsial | **Laporan P1 (2026-11-25):** ringkasan + laporan penjualan/pembelian/stok/retur (`/reports`, `docs/REPORTS.md`) | P1 — ekspor belum ada |
+| Laporan Pembelian / Penjualan / Persediaan | Sudah Ada dan Teruji | **Laporan P1 (2026-11-25):** `/reports/sales`, `/reports/purchases`, `/reports/stock` + ringkasan usaha; filter tanggal UTC; tanpa migrasi (`tests/test_reports.py`) | — |
 | Laporan Hutang/Piutang (beredar, umur, jatuh tempo) | Belum Ada | Tanpa data hutang/piutang | P1 |
 | Laporan Keuangan (buku besar, neraca saldo, neraca, laba rugi) | Belum Ada | Tanpa akun/jurnal | P2 |
 | Ekspor PDF/XLSX | Belum Ada | Tanpa dependensi ekspor | P1 — pilih satu format dulu (mis. CSV/XLSX), jangan semua sekaligus |

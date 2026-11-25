@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Laporan Stok — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Laporan Stok</h1>
+<p><a href="/reports">Kembali ke ringkasan</a> | <a href="/products">Daftar produk &amp; stok</a></p>
+<form method="get" action="/reports/stock">
+  <label>Dari (UTC): <input type="date" name="dari" value="{{ dari }}"></label>
+  <label>Sampai (UTC): <input type="date" name="sampai" value="{{ sampai }}"></label>
+  <label>Produk:
+    <select name="produk">
+      <option value="">Semua</option>
+      {% for p in products %}
+      <option value="{{ p.id }}" {% if product_id == p.id|string %}selected{% endif %}>{{ p.name }} ({{ p.sku }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Cari: <input type="search" name="q" value="{{ q }}"></label>
+  <button type="submit">Tampilkan</button>
+</form>
+<p><small>Saldo adalah saldo saat ini. Kolom Masuk/Keluar dihitung dari ledger mutasi stok pada rentang tanggal (UTC) — sumber kebenaran stok.</small></p>
+{% if rows %}
+<table>
+  <tr><th>Produk</th><th>SKU</th><th>Kategori</th><th>Satuan</th><th>Saldo</th><th>Masuk</th><th>Keluar</th><th>Mutasi</th><th>Stok min.</th></tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.name }}</td>
+    <td>{{ r.sku }}</td>
+    <td>{{ r.category_name or '-' }}</td>
+    <td>{{ r.unit_name or '-' }}</td>
+    <td>{{ r.stock_qty }}{% if r.stock_qty <= 0 %} (Habis){% elif r.stock_qty <= r.min_stock %} (Rendah){% endif %}</td>
+    <td>{{ r.masuk }}</td>
+    <td>{{ r.keluar }}</td>
+    <td>{{ r.n_mutasi }}</td>
+    <td>{{ r.min_stock }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>Tidak ada produk pada filter ini.</p>
+{% endif %}
+{% endblock %}

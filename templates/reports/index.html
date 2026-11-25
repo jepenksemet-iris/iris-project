@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Laporan — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Laporan</h1>
+<p><a href="/reports/sales">Penjualan</a> | <a href="/reports/purchases">Pembelian</a> | <a href="/reports/stock">Stok</a> | <a href="/reports/returns">Retur &amp; Pembatalan</a></p>
+<form method="get" action="/reports">
+  <label>Dari (UTC): <input type="date" name="dari" value="{{ dari }}"></label>
+  <label>Sampai (UTC): <input type="date" name="sampai" value="{{ sampai }}"></label>
+  <button type="submit">Tampilkan</button>
+</form>
+<p><small>Semua tanggal memakai kalender UTC. Rentang bersifat [dari 00:00, sampai+1 hari 00:00). Angka dapat ditelusuri ke transaksi sumber di halaman riwayat.</small></p>
+<h2>Ringkasan usaha — {{ dari }} s.d. {{ sampai }} (UTC)</h2>
+<h3>Penjualan</h3>
+<ul>
+  <li>Transaksi aktif: {{ sales.n_aktif }} ({{ sales.n }} total tercatat)</li>
+  <li>Penjualan kotor: Rp {{ sales.kotor }}</li>
+  <li>Diskon: Rp {{ sales.diskon }}</li>
+  <li>Nilai retur penjualan ({{ sales.n_retur }} retur): Rp {{ sales.retur }}</li>
+  <li><strong>Penjualan bersih: Rp {{ sales.bersih }}</strong></li>
+  <li>Nilai pembatalan penjualan ({{ sales.n_batal }} transaksi, ditampilkan terpisah): Rp {{ sales.batal }}</li>
+</ul>
+<h3>Pembayaran (transaksi aktif)</h3>
+{% if sales.pembayaran %}
+<ul>
+  {% for p in sales.pembayaran %}
+  <li>{{ p.method }}: Rp {{ p.paid }} ({{ p.n }} transaksi)</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>Belum ada pembayaran pada rentang ini.</p>
+{% endif %}
+<h3>Pembelian</h3>
+<ul>
+  <li>Transaksi aktif: {{ purchases.n_aktif }} ({{ purchases.n }} total tercatat)</li>
+  <li>Total pembelian: Rp {{ purchases.total }}</li>
+  <li>Nilai retur pembelian ({{ purchases.n_retur }} retur): Rp {{ purchases.retur }}</li>
+  <li><strong>Pembelian bersih: Rp {{ purchases.bersih }}</strong></li>
+  <li>Nilai pembatalan pembelian ({{ purchases.n_batal }} transaksi, ditampilkan terpisah): Rp {{ purchases.batal }}</li>
+</ul>
+<p><small>Definisi: penjualan kotor = total transaksi aktif (completed/returned); penjualan bersih = kotor − nilai retur penjualan; transaksi batal tidak dihitung sebagai penjualan aktif. Laporan ini bukan laporan laba/rugi — omzet bukan laba.</small></p>
+{% endblock %}

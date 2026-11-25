@@ -17,7 +17,7 @@ import json
 import os
 import re
 import sqlite3
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -1979,3 +1979,257 @@ def cancel_return(conn, return_id, user_id, reason):
     finally:
         conn.isolation_level = wasolation
     return True
+
+
+# ----------------------------------------------------------------------
+# Laporan (P1 — Rencana Lanjutan, Langkah 1)
+# ----------------------------------------------------------------------
+# Laporan hanya MEMBACA data transaksi yang sudah ada — tidak ada
+# migrasi skema. Semua created_at memakai datetime('now') (UTC), maka
+# filter tanggal memakai rentang kalender UTC half-open:
+#   created_at >= 'YYYY-MM-DD 00:00:00' AND created_at < 'YYYY-MM-DD+1 00:00:00'
+# (batas awal inklusif, batas akhir eksklusif) agar tidak kehilangan
+# data di batas waktu dan agar indeks created_at tetap terpakai.
+# Uang selalu INTEGER rupiah. Definisi metrik ada di docs/REPORTS.md.
+# ----------------------------------------------------------------------
+
+def parse_report_range(date_from, date_to):
+    """Validasi tanggal filter laporan (YYYY-MM-DD, kalender UTC).
+
+    Mengembalikan (start, end_exclusive) sebagai string ISO
+    'YYYY-MM-DD HH:MM:SS', atau (None, None) bila keduanya tidak valid.
+    Tanggal yang tidak valid diabaikan (batas itu tidak dipakai).
+    """
+    start = end = None
+    if date_from:
+        try:
+            d = datetime.strptime(date_from, "%Y-%m-%d").date()
+            start = d.strftime("%Y-%m-%d 00:00:00")
+        except (TypeError, ValueError):
+            pass
+    if date_to:
+        try:
+            d = datetime.strptime(date_to, "%Y-%m-%d").date()
+            end = (d + timedelta(days=1)).strftime("%Y-%m-%d 00:00:00")
+        except (TypeError, ValueError):
+            pass
+    return start, end
+
+
+def _in_range(where, args, start, end, column="created_at"):
+    if start:
+        where.append(f"{column} >= ?")
+        args.append(start)
+    if end:
+        where.append(f"{column} < ?")
+        args.append(end)
+
+
+def report_sales_summary(conn, start, end):
+    """Ringkasan penjualan dalam rentang UTC.
+
+    kotor = total penjualan aktif (completed/returned); diskon = jumlah
+    diskon transaksi aktif; batal = total penjualan void (terpisah,
+    tidak masuk kotor); retur = nilai retur penjualan completed;
+    bersih = kotor - retur. pembayaran = paid per metode untuk
+    transaksi aktif (non-tunai pending bernilai 0 sampai dikonfirmasi).
+    """
+    where, args = [], []
+    _in_range(where, args, start, end, "s.created_at")
+    filt = (" WHERE " + " AND ".join(where)) if where else ""
+    row = conn.execute(
+        "SELECT COUNT(*) AS n,"
+        " COALESCE(SUM(CASE WHEN s.status IN ('completed','returned')"
+        "  THEN s.total ELSE 0 END), 0) AS kotor,"
+        " COALESCE(SUM(CASE WHEN s.status IN ('completed','returned')"
+        "  THEN s.discount ELSE 0 END), 0) AS diskon,"
+        " COALESCE(SUM(CASE WHEN s.status = 'void' THEN s.total"
+        "  ELSE 0 END), 0) AS batal,"
+        " COUNT(CASE WHEN s.status IN ('completed','returned')"
+        "  THEN 1 END) AS n_aktif,"
+        " COUNT(CASE WHEN s.status = 'void' THEN 1 END) AS n_batal"
+        f" FROM sales s{filt}",
+        args,
+    ).fetchone()
+    rwhere, rargs = ["r.kind = 'sale_return'", "r.status = 'completed'"], []
+    _in_range(rwhere, rargs, start, end, "r.created_at")
+    retur = conn.execute(
+        "SELECT COALESCE(SUM(r.total), 0) AS retur, COUNT(*) AS n"
+        " FROM returns r WHERE " + " AND ".join(rwhere),
+        rargs,
+    ).fetchone()
+    pay_where, pay_args = ["s.status IN ('completed','returned')"], []
+    _in_range(pay_where, pay_args, start, end, "s.created_at")
+    payments = conn.execute(
+        "SELECT s.payment_method AS method,"
+        " COALESCE(SUM(s.paid), 0) AS paid, COUNT(*) AS n"
+        " FROM sales s WHERE " + " AND ".join(pay_where) +
+        " GROUP BY s.payment_method ORDER BY paid DESC",
+        pay_args,
+    ).fetchall()
+    return {
+        "n": row["n"], "n_aktif": row["n_aktif"], "n_batal": row["n_batal"],
+        "kotor": row["kotor"], "diskon": row["diskon"],
+        "batal": row["batal"], "retur": retur["retur"],
+        "n_retur": retur["n"], "bersih": row["kotor"] - retur["retur"],
+        "pembayaran": payments,
+    }
+
+
+def report_sales_rows(conn, start, end, limit=200):
+    where, args = [], []
+    _in_range(where, args, start, end, "s.created_at")
+    sql = (
+        "SELECT s.*, u.full_name AS cashier_name,"
+        " (SELECT COUNT(*) FROM sale_items i WHERE i.sale_id = s.id)"
+        "  AS item_count FROM sales s"
+        " LEFT JOIN users u ON u.id = s.user_id"
+    )
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY s.created_at DESC, s.id DESC LIMIT ?"
+    args.append(limit)
+    return conn.execute(sql, args).fetchall()
+
+
+def report_purchases_summary(conn, start, end):
+    """Ringkasan pembelian: aktif = received/returned; batal = cancelled;
+    retur = nilai retur pembelian completed; bersih = aktif - retur."""
+    where, args = [], []
+    _in_range(where, args, start, end, "p.created_at")
+    filt = (" WHERE " + " AND ".join(where)) if where else ""
+    row = conn.execute(
+        "SELECT COUNT(*) AS n,"
+        " COALESCE(SUM(CASE WHEN p.status IN ('received','returned')"
+        "  THEN p.total ELSE 0 END), 0) AS total,"
+        " COALESCE(SUM(CASE WHEN p.status = 'cancelled' THEN p.total"
+        "  ELSE 0 END), 0) AS batal,"
+        " COUNT(CASE WHEN p.status IN ('received','returned')"
+        "  THEN 1 END) AS n_aktif,"
+        " COUNT(CASE WHEN p.status = 'cancelled' THEN 1 END) AS n_batal"
+        f" FROM purchases p{filt}",
+        args,
+    ).fetchone()
+    rwhere, rargs = ["r.kind = 'purchase_return'",
+                     "r.status = 'completed'"], []
+    _in_range(rwhere, rargs, start, end, "r.created_at")
+    retur = conn.execute(
+        "SELECT COALESCE(SUM(r.total), 0) AS retur, COUNT(*) AS n"
+        " FROM returns r WHERE " + " AND ".join(rwhere),
+        rargs,
+    ).fetchone()
+    return {
+        "n": row["n"], "n_aktif": row["n_aktif"], "n_batal": row["n_batal"],
+        "total": row["total"], "batal": row["batal"],
+        "retur": retur["retur"], "n_retur": retur["n"],
+        "bersih": row["total"] - retur["retur"],
+    }
+
+
+def report_purchases_rows(conn, start, end, limit=200):
+    where, args = [], []
+    _in_range(where, args, start, end, "p.created_at")
+    sql = (
+        "SELECT p.*, s.name AS supplier_name,"
+        " (SELECT COUNT(*) FROM purchase_items i WHERE i.purchase_id = p.id)"
+        "  AS item_count FROM purchases p"
+        " LEFT JOIN suppliers s ON s.id = p.supplier_id"
+    )
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY p.created_at DESC, p.id DESC LIMIT ?"
+    args.append(limit)
+    return conn.execute(sql, args).fetchall()
+
+
+def report_stock(conn, start, end, product_id=None, category_id=None,
+                 limit=500):
+    """Laporan stok: saldo saat ini + mutasi masuk/keluar dalam rentang
+    (dari ledger stock_movements, sumber kebenaran stok)."""
+    args = []
+    where = []
+    if product_id:
+        where.append("p.id = ?")
+        args.append(product_id)
+    if category_id:
+        where.append("p.category_id = ?")
+        args.append(category_id)
+    range_args = []
+    if start:
+        range_args.append(start)
+    if end:
+        range_args.append(end)
+    cond = ""
+    if start and end:
+        cond = "AND m.created_at >= ? AND m.created_at < ?"
+    elif start:
+        cond = "AND m.created_at >= ?"
+    elif end:
+        cond = "AND m.created_at < ?"
+    sql = (
+        "SELECT p.id, p.name, p.sku, p.min_stock,"
+        " c.name AS category_name, u.name AS unit_name,"
+        " COALESCE((SELECT SUM(qty) FROM stock s"
+        "  WHERE s.product_id = p.id), 0) AS stock_qty,"
+        " COALESCE(SUM(CASE WHEN m.qty > 0 THEN m.qty ELSE 0 END), 0)"
+        "  AS masuk,"
+        " COALESCE(SUM(CASE WHEN m.qty < 0 THEN -m.qty ELSE 0 END), 0)"
+        "  AS keluar,"
+        " COUNT(m.id) AS n_mutasi"
+        " FROM products p"
+        " LEFT JOIN categories c ON c.id = p.category_id"
+        " LEFT JOIN units u ON u.id = p.unit_id"
+        " LEFT JOIN stock_movements m ON m.product_id = p.id"
+        f" {cond}"
+    )
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " GROUP BY p.id ORDER BY p.name ASC LIMIT ?"
+    args = range_args + args + [limit]
+    return conn.execute(sql, args).fetchall()
+
+
+def report_returns_rows(conn, start, end, kind=None, limit=200):
+    where, args = [], []
+    if kind in RETURN_KINDS:
+        where.append("r.kind = ?")
+        args.append(kind)
+    _in_range(where, args, start, end, "r.created_at")
+    sql = (
+        "SELECT r.*, s.invoice_no AS sale_invoice,"
+        " p.invoice_no AS purchase_invoice,"
+        " (SELECT COUNT(*) FROM return_items i WHERE i.return_id = r.id)"
+        "  AS item_count FROM returns r"
+        " LEFT JOIN sales s ON s.id = r.sale_id"
+        " LEFT JOIN purchases p ON p.id = r.purchase_id"
+    )
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY r.created_at DESC, r.id DESC LIMIT ?"
+    args.append(limit)
+    return conn.execute(sql, args).fetchall()
+
+
+def report_voids_rows(conn, start, end, limit=200):
+    """Pembatalan dalam rentang: penjualan void + pembelian cancelled."""
+    where_s, args_s = ["s.status = 'void'"], []
+    _in_range(where_s, args_s, start, end, "s.created_at")
+    sales = conn.execute(
+        "SELECT s.invoice_no AS nomor, s.created_at, s.total,"
+        " s.void_reason AS alasan, u.full_name AS oleh"
+        " FROM sales s LEFT JOIN users u ON u.id = s.voided_by"
+        " WHERE " + " AND ".join(where_s) +
+        " ORDER BY s.created_at DESC, s.id DESC LIMIT ?",
+        args_s + [limit],
+    ).fetchall()
+    where_p, args_p = ["p.status = 'cancelled'"], []
+    _in_range(where_p, args_p, start, end, "p.created_at")
+    purchases = conn.execute(
+        "SELECT p.invoice_no AS nomor, p.created_at, p.total,"
+        " p.cancel_reason AS alasan, u.full_name AS oleh"
+        " FROM purchases p LEFT JOIN users u ON u.id = p.cancelled_by"
+        " WHERE " + " AND ".join(where_p) +
+        " ORDER BY p.created_at DESC, p.id DESC LIMIT ?",
+        args_p + [limit],
+    ).fetchall()
+    return {"penjualan": sales, "pembelian": purchases}

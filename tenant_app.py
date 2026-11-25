@@ -61,6 +61,7 @@ from iris_db import (
     RETURN_KINDS,
     RETURN_STATUSES,
     SALE_STATUSES,
+    parse_report_range,
     adjust_stock,
     cancel_purchase,
     cancel_return,
@@ -94,6 +95,13 @@ from iris_db import (
     list_sales,
     list_stock_movements,
     list_suppliers,
+    report_purchases_rows,
+    report_purchases_summary,
+    report_returns_rows,
+    report_sales_rows,
+    report_sales_summary,
+    report_stock,
+    report_voids_rows,
     set_supplier_active,
     update_supplier,
     void_sale,
@@ -596,6 +604,127 @@ def create_app(config_class=None):
         finally:
             conn.close()
         return redirect(url_for("sale_detail", sale_id=sale_id))
+
+    # ------------------------------------------------------------------
+    # Laporan (P1 — Rencana Lanjutan, Langkah 1)
+    # ------------------------------------------------------------------
+    def _report_dates():
+        """Tanggal filter laporan (kalender UTC). Default: bulan berjalan
+        (UTC). Tanggal tidak valid diabaikan (batas itu tidak dipakai)."""
+        from datetime import datetime as _dt, timezone
+
+        def _valid(value):
+            try:
+                _dt.strptime(value, "%Y-%m-%d")
+                return value
+            except (TypeError, ValueError):
+                return None
+
+        now = _dt.now(timezone.utc)
+        dari = _valid(request.args.get("dari") or "")
+        sampai = _valid(request.args.get("sampai") or "")
+        if dari is None and sampai is None:
+            dari = now.strftime("%Y-%m-01")
+            sampai = now.strftime("%Y-%m-%d")
+        start, end = parse_report_range(dari, sampai)
+        return dari or "", sampai or "", start, end
+
+    def _report_ctx():
+        dari, sampai, start, end = _report_dates()
+        return {"dari": dari, "sampai": sampai, "start": start,
+                "end": end}
+
+    @app.get("/reports")
+    @login_required
+    def reports_index():
+        slug = session["tenant"]
+        ctx = _report_ctx()
+        conn = _db(slug)
+        try:
+            sales = report_sales_summary(conn, ctx["start"], ctx["end"])
+            purchases = report_purchases_summary(conn, ctx["start"],
+                                                ctx["end"])
+        finally:
+            conn.close()
+        return render_template(
+            "reports/index.html", tenant=slug, sales=sales,
+            purchases=purchases, **{k: v for k, v in ctx.items()
+                                    if k in ("dari", "sampai")})
+
+    @app.get("/reports/sales")
+    @login_required
+    def reports_sales():
+        slug = session["tenant"]
+        ctx = _report_ctx()
+        conn = _db(slug)
+        try:
+            summary = report_sales_summary(conn, ctx["start"], ctx["end"])
+            rows = report_sales_rows(conn, ctx["start"], ctx["end"])
+        finally:
+            conn.close()
+        return render_template(
+            "reports/sales.html", tenant=slug, summary=summary, rows=rows,
+            **{k: v for k, v in ctx.items() if k in ("dari", "sampai")})
+
+    @app.get("/reports/purchases")
+    @login_required
+    def reports_purchases():
+        slug = session["tenant"]
+        ctx = _report_ctx()
+        conn = _db(slug)
+        try:
+            summary = report_purchases_summary(conn, ctx["start"],
+                                               ctx["end"])
+            rows = report_purchases_rows(conn, ctx["start"], ctx["end"])
+        finally:
+            conn.close()
+        return render_template(
+            "reports/purchases.html", tenant=slug, summary=summary,
+            rows=rows,
+            **{k: v for k, v in ctx.items() if k in ("dari", "sampai")})
+
+    @app.get("/reports/stock")
+    @login_required
+    def reports_stock():
+        slug = session["tenant"]
+        ctx = _report_ctx()
+        q = (request.args.get("q") or "").strip()
+        product_id = request.args.get("produk") or ""
+        conn = _db(slug)
+        try:
+            products = list_products(conn, limit=500)
+            rows = report_stock(
+                conn, ctx["start"], ctx["end"],
+                product_id=int(product_id) if product_id.isdigit() else None)
+            if q:
+                ql = q.lower()
+                rows = [r for r in rows
+                        if ql in r["name"].lower()
+                        or ql in (r["sku"] or "").lower()]
+        finally:
+            conn.close()
+        return render_template(
+            "reports/stock.html", tenant=slug, rows=rows,
+            products=products, product_id=product_id, q=q,
+            **{k: v for k, v in ctx.items() if k in ("dari", "sampai")})
+
+    @app.get("/reports/returns")
+    @login_required
+    def reports_returns():
+        slug = session["tenant"]
+        ctx = _report_ctx()
+        kind = request.args.get("jenis") or ""
+        conn = _db(slug)
+        try:
+            rows = report_returns_rows(conn, ctx["start"], ctx["end"],
+                                       kind=kind or None)
+            voids = report_voids_rows(conn, ctx["start"], ctx["end"])
+        finally:
+            conn.close()
+        return render_template(
+            "reports/returns.html", tenant=slug, rows=rows, voids=voids,
+            kind=kind,
+            **{k: v for k, v in ctx.items() if k in ("dari", "sampai")})
 
     # ------------------------------------------------------------------
     # Pemasok & pembelian (P1 Tahap 6)

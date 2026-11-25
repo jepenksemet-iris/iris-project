@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Laporan Penjualan — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Laporan Penjualan</h1>
+<p><a href="/reports">Kembali ke ringkasan</a></p>
+<form method="get" action="/reports/sales">
+  <label>Dari (UTC): <input type="date" name="dari" value="{{ dari }}"></label>
+  <label>Sampai (UTC): <input type="date" name="sampai" value="{{ sampai }}"></label>
+  <button type="submit">Tampilkan</button>
+</form>
+<ul>
+  <li>Transaksi aktif: {{ summary.n_aktif }} — kotor Rp {{ summary.kotor }}, diskon Rp {{ summary.diskon }}</li>
+  <li>Nilai retur penjualan: Rp {{ summary.retur }} ({{ summary.n_retur }} retur)</li>
+  <li><strong>Penjualan bersih: Rp {{ summary.bersih }}</strong></li>
+  <li>Pembatalan ({{ summary.n_batal }} transaksi): Rp {{ summary.batal }} — tidak dihitung sebagai penjualan aktif</li>
+</ul>
+{% if rows %}
+<table>
+  <tr><th>Nomor</th><th>Tanggal (UTC)</th><th>Kasir</th><th>Item</th><th>Subtotal</th><th>Diskon</th><th>Total</th><th>Metode</th><th>Status</th><th></th></tr>
+  {% for s in rows %}
+  <tr>
+    <td>{{ s.invoice_no }}</td>
+    <td>{{ s.created_at }}</td>
+    <td>{{ s.cashier_name or '-' }}</td>
+    <td>{{ s.item_count }}</td>
+    <td>Rp {{ s.subtotal }}</td>
+    <td>Rp {{ s.discount }}</td>
+    <td>Rp {{ s.total }}</td>
+    <td>{{ s.payment_method }}</td>
+    <td>{{ s.status }}</td>
+    <td><a href="/sales/{{ s.id }}">Detail</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>Tidak ada transaksi penjualan pada rentang ini.</p>
+{% endif %}
+{% endblock %}

@@ -20,6 +20,8 @@ Dokumen induk (sumber kebenaran rancangan): [DOKUMENTASI_PROYEK_IRIS.md](DOKUMEN
 | [P1_KASIR_AUDIT.md](P1_KASIR_AUDIT.md) | Audit Tahap 1 P1: verifikasi P0, gap skema v3, keputusan bisnis kasir |
 | [P1_LEDGER_AUDIT.md](P1_LEDGER_AUDIT.md) | Audit Tahap 4: verifikasi integrasi checkout ↔ ledger + audit riwayat/detail/struk, rancangan pembatalan |
 | [P1_RETUR_AUDIT.md](P1_RETUR_AUDIT.md) | Audit Tahap 7: temuan skema v5 + rancangan retur penjualan/pembelian |
+| [RENCANA_LANJUTAN_AUDIT.md](RENCANA_LANJUTAN_AUDIT.md) | Audit fondasi rencana lanjutan: laporan, keuangan, PO, rekonsiliasi |
+| [REPORTS.md](REPORTS.md) | Definisi metrik laporan + aturan filter tanggal UTC |
 | [CHANGELOG.md](CHANGELOG.md) | Catatan perubahan dokumentasi & keputusan |
 
 > Bedakan dengan jelas antara fitur yang sudah berjalan, sedang dikerjakan, dan masih berupa rencana. Perbarui dokumen setiap kali ada keputusan arsitektur, perubahan modul, perubahan paket harga, atau perubahan prosedur deployment.

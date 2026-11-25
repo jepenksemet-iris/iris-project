@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Laporan Pembelian — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Laporan Pembelian</h1>
+<p><a href="/reports">Kembali ke ringkasan</a></p>
+<form method="get" action="/reports/purchases">
+  <label>Dari (UTC): <input type="date" name="dari" value="{{ dari }}"></label>
+  <label>Sampai (UTC): <input type="date" name="sampai" value="{{ sampai }}"></label>
+  <button type="submit">Tampilkan</button>
+</form>
+<ul>
+  <li>Transaksi aktif: {{ summary.n_aktif }} — total Rp {{ summary.total }}</li>
+  <li>Nilai retur pembelian: Rp {{ summary.retur }} ({{ summary.n_retur }} retur)</li>
+  <li><strong>Pembelian bersih: Rp {{ summary.bersih }}</strong></li>
+  <li>Pembatalan ({{ summary.n_batal }} transaksi): Rp {{ summary.batal }} — ditampilkan terpisah</li>
+</ul>
+<p><small>Status pembayaran/utang belum tersedia — modul keuangan belum diimplementasikan.</small></p>
+{% if rows %}
+<table>
+  <tr><th>Nomor</th><th>Tanggal (UTC)</th><th>Pemasok</th><th>Item</th><th>Total</th><th>Status</th><th></th></tr>
+  {% for p in rows %}
+  <tr>
+    <td>{{ p.invoice_no }}</td>
+    <td>{{ p.created_at }}</td>
+    <td>{{ p.supplier_name or '-' }}</td>
+    <td>{{ p.item_count }}</td>
+    <td>Rp {{ p.total }}</td>
+    <td>{{ p.status }}</td>
+    <td><a href="/purchases/{{ p.id }}">Detail</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>Tidak ada transaksi pembelian pada rentang ini.</p>
+{% endif %}
+{% endblock %}

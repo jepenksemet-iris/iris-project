@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Laporan Retur &amp; Pembatalan — Tenant {{ tenant }}{% endblock %}
+{% block content %}
+<h1>Laporan Retur &amp; Pembatalan</h1>
+<p><a href="/reports">Kembali ke ringkasan</a></p>
+<form method="get" action="/reports/returns">
+  <label>Dari (UTC): <input type="date" name="dari" value="{{ dari }}"></label>
+  <label>Sampai (UTC): <input type="date" name="sampai" value="{{ sampai }}"></label>
+  <label>Jenis:
+    <select name="jenis">
+      <option value="">Semua</option>
+      <option value="sale_return" {% if kind == 'sale_return' %}selected{% endif %}>Retur Penjualan</option>
+      <option value="purchase_return" {% if kind == 'purchase_return' %}selected{% endif %}>Retur Pembelian</option>
+    </select>
+  </label>
+  <button type="submit">Tampilkan</button>
+</form>
+<h2>Retur</h2>
+<p><small>Retur bukan bukti refund sudah dibayar — modul refund belum tersedia.</small></p>
+{% if rows %}
+<table>
+  <tr><th>Nomor</th><th>Jenis</th><th>Transaksi asal</th><th>Tanggal (UTC)</th><th>Item</th><th>Nilai</th><th>Status</th><th></th></tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.return_no }}</td>
+    <td>{{ 'Penjualan' if r.kind == 'sale_return' else 'Pembelian' }}</td>
+    <td>{{ r.sale_invoice or r.purchase_invoice or '-' }}</td>
+    <td>{{ r.created_at }}</td>
+    <td>{{ r.item_count }}</td>
+    <td>Rp {{ r.total }}</td>
+    <td>{{ r.status }}</td>
+    <td><a href="/returns/{{ r.id }}">Detail</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>Tidak ada retur pada rentang ini.</p>
+{% endif %}
+<h2>Pembatalan</h2>
+{% if voids.penjualan %}
+<table>
+  <tr><th>Jenis</th><th>Nomor</th><th>Tanggal (UTC)</th><th>Total</th><th>Alasan</th><th>Oleh</th></tr>
+  {% for v in voids.penjualan %}
+  <tr><td>Penjualan</td><td>{{ v.nomor }}</td><td>{{ v.created_at }}</td><td>Rp {{ v.total }}</td><td>{{ v.alasan }}</td><td>{{ v.oleh or '-' }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>Tidak ada pembatalan penjualan pada rentang ini.</p>
+{% endif %}
+{% if voids.pembelian %}
+<table>
+  <tr><th>Jenis</th><th>Nomor</th><th>Tanggal (UTC)</th><th>Total</th><th>Alasan</th><th>Oleh</th></tr>
+  {% for v in voids.pembelian %}
+  <tr><td>Pembelian</td><td>{{ v.nomor }}</td><td>{{ v.created_at }}</td><td>Rp {{ v.total }}</td><td>{{ v.alasan }}</td><td>{{ v.oleh or '-' }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>Tidak ada pembatalan pembelian pada rentang ini.</p>
+{% endif %}
+{% endblock %}
